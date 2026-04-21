@@ -1303,15 +1303,20 @@ function handleDownload() {
 }
 
 function performDownload() {
-  // Download the current page itself as an HTML file
-  const html = document.documentElement.outerHTML;
-  const blob = new Blob([html], { type: 'text/html' });
-  const url = URL.createObjectURL(blob);
+  // REPLACE THIS URL WITH YOUR GITHUB APK URL
+  const apkUrl = 'https://github.com/Papalvic/colorimetry/raw/refs/heads/main/colorimetry.apk';
+  
+  // Create download link
   const a = document.createElement('a');
-  a.href = url; a.download = 'ColoriSense_Pro.html';
-  document.body.appendChild(a); a.click();
+  a.href = apkUrl;
+  a.download = 'colorimetry.apk';
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
   document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  
+  UI.toast('Downloading colorimetry.apk...', 'success');
+  
   if (!AccessControl.isLicensed()) {
     UI.toast(`Download ${AccessControl.MAX_DOWNLOADS_TRIAL - AccessControl.downloadsLeft()}/${AccessControl.MAX_DOWNLOADS_TRIAL} used (trial).`, 'warn');
   }
