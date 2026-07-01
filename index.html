@@ -459,6 +459,7 @@ hr { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
           <span class="hero-chip">Continuous Drawing</span>
           <span class="hero-chip">Beer-Lambert Law</span>
           <span class="hero-chip">Multi-ROI Support</span>
+          <span class="hero-chip">HSV Analysis</span>
         </div>
       </div>
     </div>
@@ -536,6 +537,10 @@ hr { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
             You'll be prompted to label each region immediately. Drawing stays active until you click Stop.
           </p>
 
+          <div class="btn-group" style="margin-top:12px">
+            <button class="btn btn-teal btn-sm" id="exportImagePngBtn">🖼️ Export Annotated Image (PNG)</button>
+          </div>
+
           <div id="regionQuickList" style="margin-top:14px"></div>
         </div>
       </div>
@@ -553,6 +558,7 @@ hr { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
           <div class="btn-group">
             <button class="btn btn-danger btn-sm" id="clearAllRegionsBtn">🗑️ Clear All</button>
             <button class="btn btn-primary btn-sm" id="runAnalysisFromRegions">⚗️ Run Analysis</button>
+            <button class="btn btn-teal btn-sm" id="exportRegionsCsvBtn">📥 Export Regions (CSV)</button>
           </div>
         </div>
       </div>
@@ -571,6 +577,9 @@ hr { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
         <div class="form-group"><label>Select Region</label><select id="histRegionSelect"><option value="">-- Select a region --</option></select></div>
         <div id="histCanvasWrap" class="histogram-wrap" style="display:none"><canvas id="histCanvas" height="160"></canvas></div>
         <div id="histStats" style="margin-top:12px;display:none"><div class="metrics-grid" id="histMetricsGrid"></div></div>
+        <div class="btn-group" id="histExportRow" style="display:none;margin-top:6px;margin-bottom:6px">
+          <button class="btn btn-teal btn-sm" id="exportHistPngBtn">🖼️ Export Histogram (PNG)</button>
+        </div>
         <div id="histCompareSection" style="margin-top:14px;display:none"><div class="section-title">Comparative Histograms</div><div id="histCompareList"></div></div>
         <div id="histEmpty" class="no-data-msg"><span class="nd-icon">📊</span>Select a region to generate its histogram.</div>
       </div>
@@ -632,7 +641,7 @@ hr { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
   <section class="tab-panel fade-in" id="tab-calibration">
     <div id="calibEmpty" class="no-data-msg"><span class="nd-icon">📈</span>No calibration data yet.<br>Run a Mode 3 or Mode 4 analysis first.</div>
     <div id="calibContent" style="display:none">
-      <div class="card"><div class="card-header"><h2>Calibration Curve</h2></div><div class="card-body"><div class="chart-wrap"><canvas id="calibCanvas" height="220"></canvas></div><div id="calibModelCards" class="model-cards" style="margin-top:14px"></div></div></div>
+      <div class="card"><div class="card-header"><h2>Calibration Curve</h2></div><div class="card-body"><div class="chart-wrap"><canvas id="calibCanvas" height="220"></canvas></div><div class="btn-group" style="margin-top:12px"><button class="btn btn-teal btn-sm" id="exportCalibPngBtn">🖼️ Export Chart (PNG)</button></div><div id="calibModelCards" class="model-cards" style="margin-top:14px"></div></div></div>
       <div class="card"><div class="card-header"><h2>Concentration Results</h2></div><div class="card-body"><div class="results-table-wrap"><table id="concResultsTable"><thead><tr><th>Name</th><th>Raw Int.</th><th>Corr. Int.</th><th>Absorbance</th><th>Concentration</th><th>Model</th></tr></thead><tbody id="concResultsBody"></tbody></table></div></div></div>
     </div>
   </section>
@@ -710,6 +719,9 @@ const STATE = {
   currentMode: 1,
   colors: ['#e84393','#1e78d4','#00c9b1','#f4a728','#9b59b6','#e84c3c','#3498db','#2ecc71','#f39c12','#34495e']
 };
+
+/* Holds the most recent analysis result so it can be exported */
+let LAST_RESULT = null;
 
 /* ── CANVAS ELEMENTS ── */
 const imageCanvas   = document.getElementById('imageCanvas');
@@ -1009,6 +1021,30 @@ function redrawOverlay(){
   }
 }
 
+/* ── RGB → HSV CONVERSION ──
+   r,g,b expected in the 0-255 range.
+   Returns { h: 0-360°, s: 0-100%, v: 0-100% } rounded to 1 decimal place. */
+function rgbToHsv(r, g, b) {
+  const rn = r / 255, gn = g / 255, bn = b / 255;
+  const max = Math.max(rn, gn, bn), min = Math.min(rn, gn, bn);
+  const delta = max - min;
+  let h = 0;
+  if (delta !== 0) {
+    if (max === rn)      h = ((gn - bn) / delta) % 6;
+    else if (max === gn) h = (bn - rn) / delta + 2;
+    else                  h = (rn - gn) / delta + 4;
+    h *= 60;
+    if (h < 0) h += 360;
+  }
+  const s = max === 0 ? 0 : delta / max;
+  const v = max;
+  return {
+    h: parseFloat(h.toFixed(1)),
+    s: parseFloat((s * 100).toFixed(1)),
+    v: parseFloat((v * 100).toFixed(1))
+  };
+}
+
 /* ── EXTRACT REGION DATA ── */
 function extractRegionData(shape){
   let x,y,w,h;
@@ -1019,7 +1055,7 @@ function extractRegionData(shape){
     x=Math.max(0,Math.round(shape.x));y=Math.max(0,Math.round(shape.y));
     w=Math.min(Math.round(shape.w),imageCanvas.width-x);h=Math.min(Math.round(shape.h),imageCanvas.height-y);
   }
-  if(w<=0||h<=0)return{avgR:0,avgG:0,avgB:0,hex:'#000000',intensity:0,pixelData:[]};
+  if(w<=0||h<=0)return{avgR:0,avgG:0,avgB:0,hex:'#000000',intensity:0,hsv:{h:0,s:0,v:0},pixelData:[]};
   const raw=imgCtx.getImageData(x,y,w,h).data;
   let pixels=[];
   if(shape.type==='circle'){
@@ -1030,14 +1066,15 @@ function extractRegionData(shape){
   } else {
     for(let i=0;i<raw.length;i+=4)pixels.push({r:raw[i],g:raw[i+1],b:raw[i+2]});
   }
-  if(pixels.length===0)return{avgR:0,avgG:0,avgB:0,hex:'#000000',intensity:0,pixelData:[]};
+  if(pixels.length===0)return{avgR:0,avgG:0,avgB:0,hex:'#000000',intensity:0,hsv:{h:0,s:0,v:0},pixelData:[]};
   const n=pixels.length;
   let sR=0,sG=0,sB=0;
   const pixData=pixels.map(p=>{sR+=p.r;sG+=p.g;sB+=p.b;return 0.299*p.r+0.587*p.g+0.114*p.b;});
   const aR=Math.round(sR/n),aG=Math.round(sG/n),aB=Math.round(sB/n);
   const intensity=parseFloat((0.299*aR+0.587*aG+0.114*aB).toFixed(3));
   const hex='#'+[aR,aG,aB].map(v=>v.toString(16).padStart(2,'0')).join('');
-  return{avgR:aR,avgG:aG,avgB:aB,hex,intensity,pixelData:pixData};
+  const hsv=rgbToHsv(aR,aG,aB);
+  return{avgR:aR,avgG:aG,avgB:aB,hex,intensity,hsv,pixelData:pixData};
 }
 
 /* ── LABEL MODAL ── */
@@ -1093,7 +1130,7 @@ function renderRegionQuickList(){
         <span class="region-shape-icon">${r.shape==='circle'?'⭕':'⬜'}</span>
         <div class="region-info">
           <strong>${escHtml(r.label)} <span style="background:${typeColor(r.type)};color:#fff;padding:1px 7px;border-radius:20px;font-size:10px;font-weight:700;margin-left:4px">${r.type}</span></strong>
-          <span>${r.hex} · I:${r.intensity.toFixed(2)}</span>
+          <span>${r.hex} · I:${r.intensity.toFixed(2)} · H:${r.hsv.h}° S:${r.hsv.s}% V:${r.hsv.v}%</span>
           <div class="intensity-bar-wrap"><div class="intensity-bar" style="width:${(r.intensity/255*100).toFixed(1)}%;background:${STATE.colors[i%STATE.colors.length]}"></div></div>
         </div>
         <div class="region-actions"><button class="btn btn-danger btn-sm" onclick="deleteRegion(${r.id})" title="Delete">✕</button></div>
@@ -1116,7 +1153,8 @@ function renderRegionList(){
       <span class="region-shape-icon">${r.shape==='circle'?'⭕':'⬜'}</span>
       <div class="region-info">
         <strong>${escHtml(r.label)} <span style="background:${typeColor(r.type)};color:#fff;padding:1px 7px;border-radius:20px;font-size:10px;font-weight:700;margin-left:4px">${r.type}</span></strong>
-        <span>rgb(${r.avgR},${r.avgG},${r.avgB}) · ${r.hex} · I:${r.intensity.toFixed(2)}</span>
+        <span>rgb(${r.avgR},${r.avgG},${r.avgB}) · ${r.hex} · I:${r.intensity.toFixed(2)}</span><br>
+        <span>HSV: ${r.hsv.h}° / ${r.hsv.s}% / ${r.hsv.v}%</span>
         <div class="intensity-bar-wrap"><div class="intensity-bar" style="width:${(r.intensity/255*100).toFixed(1)}%;background:${c}"></div></div>
       </div>
       <div class="region-actions"><button class="btn btn-danger btn-sm" onclick="deleteRegion(${r.id})" title="Delete">✕</button></div>`;
@@ -1145,7 +1183,7 @@ function refreshHistogramSelects(){
   if(cur)sel.value=cur;
   if(sel.value)renderHistogram(parseInt(sel.value));else resetHistUI();
 }
-function resetHistUI(){document.getElementById('histEmpty').style.display='block';document.getElementById('histCanvasWrap').style.display='none';document.getElementById('histStats').style.display='none';document.getElementById('histCompareSection').style.display='none';}
+function resetHistUI(){document.getElementById('histEmpty').style.display='block';document.getElementById('histCanvasWrap').style.display='none';document.getElementById('histStats').style.display='none';document.getElementById('histCompareSection').style.display='none';document.getElementById('histExportRow').style.display='none';}
 document.getElementById('histRegionSelect').addEventListener('change',function(){if(!this.value){resetHistUI();return;}renderHistogram(parseInt(this.value));});
 function renderHistogram(regionId){
   const region=STATE.regions.find(r=>r.id===regionId);
@@ -1153,6 +1191,7 @@ function renderHistogram(regionId){
   document.getElementById('histEmpty').style.display='none';
   document.getElementById('histCanvasWrap').style.display='block';
   document.getElementById('histStats').style.display='block';
+  document.getElementById('histExportRow').style.display='flex';
   if(STATE.regions.length>1)document.getElementById('histCompareSection').style.display='block';
   const bins=new Array(256).fill(0);
   region.pixelData.forEach(v=>{bins[Math.min(255,Math.round(v))]++;});
@@ -1288,6 +1327,7 @@ function runAnalysis(){
   }catch(e){UI.toast('Analysis error: '+e.message,'error');return;}
   AccessControl.incrementUsage();UI.updateBanner();
   if(AccessControl.isExpired()){UI.toast('⚠ Trial usage limit reached.','warn');showLockScreen();}
+  LAST_RESULT=result;
   renderResults(result);UI.switchTab('results');
 }
 
@@ -1350,11 +1390,15 @@ function renderResults(result){
   const cont=document.getElementById('resultsContent'),empty=document.getElementById('resultsEmpty');
   empty.style.display='none';cont.style.display='block';cont.innerHTML='';
   const tc=document.createElement('div');tc.className='card fade-in';
-  tc.innerHTML=`<div class="card-header"><h2>📋 ${escHtml(result.title)}</h2></div><div class="card-body"><div class="alert alert-success" style="margin:0">✅ Analysis complete — ${result.samples.length} sample(s) processed.</div></div>`;
+  tc.innerHTML=`<div class="card-header"><h2>📋 ${escHtml(result.title)}</h2></div><div class="card-body"><div class="alert alert-success" style="margin:0 0 12px">✅ Analysis complete — ${result.samples.length} sample(s) processed.</div><div class="btn-group"><button class="btn btn-teal btn-sm" id="exportResultsCsvBtn">📥 Export Results (CSV)</button><button class="btn btn-teal btn-sm" id="exportImagePngBtn2">🖼️ Export Annotated Image (PNG)</button></div></div>`;
   cont.appendChild(tc);
+  setTimeout(()=>{
+    const b1=document.getElementById('exportResultsCsvBtn');if(b1)b1.addEventListener('click',exportResultsCSV);
+    const b2=document.getElementById('exportImagePngBtn2');if(b2)b2.addEventListener('click',exportAnnotatedImagePNG);
+  },0);
   if(result.blank){
     const bc=document.createElement('div');bc.className='card fade-in';
-    bc.innerHTML=`<div class="card-header"><h2>Blank Region</h2></div><div class="card-body"><div class="region-item"><div class="region-swatch" style="background:${result.blank.hex}"></div><div class="region-info"><strong>${escHtml(result.blank.label)}</strong><span>I: ${result.blank.intensity.toFixed(3)}</span></div></div></div>`;
+    bc.innerHTML=`<div class="card-header"><h2>Blank Region</h2></div><div class="card-body"><div class="region-item"><div class="region-swatch" style="background:${result.blank.hex}"></div><div class="region-info"><strong>${escHtml(result.blank.label)}</strong><span>I: ${result.blank.intensity.toFixed(3)} · HSV: ${result.blank.hsv.h}°/${result.blank.hsv.s}%/${result.blank.hsv.v}%</span></div></div></div>`;
     cont.appendChild(bc);
   }
   if((result.mode===2||result.mode===3)&&result.blank){
@@ -1369,7 +1413,7 @@ function renderResults(result){
   const showConc=result.mode===3||result.mode===4;
   const showAbs=result.mode===2||result.mode===3;
   const tableCard=document.createElement('div');tableCard.className='card fade-in';
-  tableCard.innerHTML=`<div class="card-header"><h2>Sample Results</h2></div><div class="card-body"><div class="results-table-wrap"><table><thead><tr><th>Name</th><th>Type</th><th>Shape</th><th>RGB</th><th>HEX</th><th>Intensity</th>${showCorr?'<th>Corr. Int.</th>':''}${showAbs?'<th>Absorbance</th>':''}${showConc?'<th>Concentration</th><th>Model</th>':''}${result.mode===1?'<th>Rank</th><th>Δ%</th>':''}</tr></thead><tbody>${result.samples.map(s=>`<tr><td class="td-name">${escHtml(s.label)}</td><td><span style="background:${typeColor(s.type)};color:#fff;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700">${s.type}</span></td><td>${s.shape==='circle'?'⭕ Circle':'⬜ Rect'}</td><td style="font-family:var(--mono)">rgb(${s.avgR},${s.avgG},${s.avgB})</td><td><span class="hex-badge"><span class="hex-dot" style="background:${s.hex}"></span>${s.hex}</span></td><td>${s.intensity.toFixed(3)}</td>${showCorr?`<td><strong>${s.correctedIntensity!==undefined?s.correctedIntensity.toFixed(3):'-'}</strong></td>`:''}${showAbs?`<td style="color:var(--blue-mid);font-weight:700">${s.absorbance!==null&&s.absorbance!==undefined?s.absorbance:'—'}</td>`:''}${showConc?`<td style="color:var(--blue-bright);font-weight:800">${s.concentration!==null&&s.concentration!==undefined?s.concentration:'N/A'}</td><td style="font-size:11px">${s.modelUsed||'-'}</td>`:''}${result.mode===1?`<td><span class="rank-badge ${s.rank===1?'rank-1':''}">#${s.rank}</span></td><td>${s.pctDiff}%</td>`:''}</tr>`).join('')}</tbody></table></div></div>`;
+  tableCard.innerHTML=`<div class="card-header"><h2>Sample Results</h2></div><div class="card-body"><div class="results-table-wrap"><table><thead><tr><th>Name</th><th>Type</th><th>Shape</th><th>RGB</th><th>HEX</th><th>HSV</th><th>Intensity</th>${showCorr?'<th>Corr. Int.</th>':''}${showAbs?'<th>Absorbance</th>':''}${showConc?'<th>Concentration</th><th>Model</th>':''}${result.mode===1?'<th>Rank</th><th>Δ%</th>':''}</tr></thead><tbody>${result.samples.map(s=>`<tr><td class="td-name">${escHtml(s.label)}</td><td><span style="background:${typeColor(s.type)};color:#fff;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700">${s.type}</span></td><td>${s.shape==='circle'?'⭕ Circle':'⬜ Rect'}</td><td style="font-family:var(--mono)">rgb(${s.avgR},${s.avgG},${s.avgB})</td><td><span class="hex-badge"><span class="hex-dot" style="background:${s.hex}"></span>${s.hex}</span></td><td style="font-family:var(--mono);font-size:11px">${s.hsv.h}°/${s.hsv.s}%/${s.hsv.v}%</td><td>${s.intensity.toFixed(3)}</td>${showCorr?`<td><strong>${s.correctedIntensity!==undefined?s.correctedIntensity.toFixed(3):'-'}</strong></td>`:''}${showAbs?`<td style="color:var(--blue-mid);font-weight:700">${s.absorbance!==null&&s.absorbance!==undefined?s.absorbance:'—'}</td>`:''}${showConc?`<td style="color:var(--blue-bright);font-weight:800">${s.concentration!==null&&s.concentration!==undefined?s.concentration:'N/A'}</td><td style="font-size:11px">${s.modelUsed||'-'}</td>`:''}${result.mode===1?`<td><span class="rank-badge ${s.rank===1?'rank-1':''}">#${s.rank}</span></td><td>${s.pctDiff}%</td>`:''}</tr>`).join('')}</tbody></table></div></div>`;
   cont.appendChild(tableCard);
   if(result.mode===3||result.mode===4)renderCalibration(result);
 }
@@ -1407,6 +1451,86 @@ function drawCalibCurve(ctx,W,H,result){
   ctx.textAlign='right';for(let i=0;i<=4;i++)ctx.fillText((yMin+(yMax-yMin)*i/4).toFixed(0),pad.l-4,toY(yMin+(yMax-yMin)*i/4)+3);
 }
 function modelTypeName(t){return t==='linear'?'Linear':t==='michaelis'?'Michaelis-Menten':t==='logistic'?'Logistic/Sigmoid':t;}
+
+/* ── EXPORT HELPERS ── */
+function csvEscape(v){
+  v = (v===null||v===undefined) ? '' : String(v);
+  if(/[",\n]/.test(v)) return '"'+v.replace(/"/g,'""')+'"';
+  return v;
+}
+function downloadCSV(rows, filename){
+  const csv = rows.map(row=>row.map(csvEscape).join(',')).join('\r\n');
+  const blob = new Blob(['\ufeff'+csv], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href=url; a.download=filename; document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+  UI.toast('✅ CSV downloaded: '+filename,'success');
+}
+function exportCanvasPNG(canvas, filename){
+  if(!canvas || !canvas.width){UI.toast('Nothing to export yet.','warn');return;}
+  canvas.toBlob(blob=>{
+    if(!blob){UI.toast('Export failed.','error');return;}
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url; a.download=filename; document.body.appendChild(a); a.click();
+    document.body.removeChild(a); URL.revokeObjectURL(url);
+    UI.toast('✅ Image downloaded: '+filename,'success');
+  },'image/png');
+}
+
+/* Export every defined region (RGB, HEX, HSV, intensity) as CSV */
+function exportRegionsCSV(){
+  if(STATE.regions.length===0){UI.toast('No regions to export.','warn');return;}
+  const headers=['Label','Type','Shape','R','G','B','Hex','H (deg)','S (%)','V (%)','Intensity'];
+  const rows=STATE.regions.map(r=>[r.label,r.type,r.shape,r.avgR,r.avgG,r.avgB,r.hex,r.hsv.h,r.hsv.s,r.hsv.v,r.intensity.toFixed(3)]);
+  downloadCSV([headers,...rows],'ColoriSense_Regions.csv');
+}
+
+/* Export the results of the most recent analysis run as CSV */
+function exportResultsCSV(){
+  const r=LAST_RESULT;
+  if(!r){UI.toast('Run an analysis first.','warn');return;}
+  const showCorr=r.mode===2||r.mode===3||r.mode===4;
+  const showConc=r.mode===3||r.mode===4;
+  const showAbs=r.mode===2||r.mode===3;
+  const headers=['Name','Type','Shape','R','G','B','Hex','H (deg)','S (%)','V (%)','Intensity'];
+  if(showCorr)headers.push('Corrected Intensity');
+  if(showAbs)headers.push('Absorbance');
+  if(showConc){headers.push('Concentration');headers.push('Model');}
+  if(r.mode===1){headers.push('Rank');headers.push('Delta %');}
+  const rows=r.samples.map(s=>{
+    const row=[s.label,s.type,s.shape,s.avgR,s.avgG,s.avgB,s.hex,s.hsv.h,s.hsv.s,s.hsv.v,s.intensity.toFixed(3)];
+    if(showCorr)row.push(s.correctedIntensity!==undefined?s.correctedIntensity.toFixed(3):'');
+    if(showAbs)row.push(s.absorbance!==null&&s.absorbance!==undefined?s.absorbance:'');
+    if(showConc){row.push(s.concentration!==null&&s.concentration!==undefined?s.concentration:'');row.push(s.modelUsed||'');}
+    if(r.mode===1){row.push(s.rank);row.push(s.pctDiff);}
+    return row;
+  });
+  downloadCSV([headers,...rows],'ColoriSense_Results_Mode'+r.mode+'.csv');
+}
+
+/* Export the image canvas merged with the ROI overlay as a PNG */
+function exportAnnotatedImagePNG(){
+  if(!STATE.imageLoaded){UI.toast('No image loaded.','warn');return;}
+  const merged=document.createElement('canvas');
+  merged.width=imageCanvas.width; merged.height=imageCanvas.height;
+  const mctx=merged.getContext('2d');
+  mctx.drawImage(imageCanvas,0,0);
+  mctx.drawImage(overlayCanvas,0,0);
+  exportCanvasPNG(merged,'ColoriSense_Annotated_Image.png');
+}
+function exportHistogramPNG(){
+  exportCanvasPNG(document.getElementById('histCanvas'),'ColoriSense_Histogram.png');
+}
+function exportCalibrationPNG(){
+  exportCanvasPNG(document.getElementById('calibCanvas'),'ColoriSense_Calibration.png');
+}
+
+document.getElementById('exportImagePngBtn').addEventListener('click',exportAnnotatedImagePNG);
+document.getElementById('exportRegionsCsvBtn').addEventListener('click',exportRegionsCSV);
+document.getElementById('exportHistPngBtn').addEventListener('click',exportHistogramPNG);
+document.getElementById('exportCalibPngBtn').addEventListener('click',exportCalibrationPNG);
 
 /* ── UTILITY ── */
 function escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
