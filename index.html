@@ -239,6 +239,7 @@ body {
   height: 100%;
   transform-origin: 0 0;
   will-change: transform;
+  touch-action: none;
 }
 #imageCanvas { display: block; width: 100%; height: 100%; image-rendering: auto; }
 #overlayCanvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; touch-action: none; }
@@ -429,6 +430,7 @@ hr { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
   padding: 16px 16px 10px;
   margin-bottom: 20px;
   border: 1px solid #e0e0e0;
+  overflow: hidden;
 }
 .vis-chart-title {
   font-size: 14px;
@@ -441,10 +443,24 @@ hr { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
   position: relative;
   width: 100%;
   height: 360px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
 }
 .vis-chart-wrap canvas {
   width: 100% !important;
   height: 100% !important;
+  min-width: 100%;
+}
+/* On mobile with many regions, allow horizontal scroll so chart doesn't squeeze */
+@media (max-width: 600px) {
+  .vis-chart-wrap {
+    height: 400px;
+  }
+  .vis-chart-wrap canvas {
+    width: auto !important;
+    min-width: 100%;
+  }
 }
 .vis-custom-legend {
   display: flex;
@@ -632,6 +648,7 @@ hr { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
               Stop Drawing
             </button>
             <button class="btn btn-danger" id="clearImageBtn">🗑️ Clear</button>
+            <button class="btn btn-secondary" id="freezeBtn" style="display:none">📌 Freeze Image</button>
           </div>
 
           <div class="canvas-wrap" id="canvasWrap">
@@ -915,6 +932,7 @@ const STATE = {
   imageLoaded: false,
   regions: [],
   drawingActive: false,
+  frozen: false,
   shapeMode: 'rect',
   dragStart: null,
   currentShape: null,
@@ -967,17 +985,33 @@ function zoomTo(scale, cx, cy) {
   updateCanvasSizes();
 }
 
+function updateZoomButtonStates() {
+  const disabled = STATE.frozen;
+  document.getElementById('zoomInBtn').disabled = disabled;
+  document.getElementById('zoomOutBtn').disabled = disabled;
+  document.getElementById('zoomResetBtn').disabled = disabled;
+  document.getElementById('zoomInBtn').style.opacity = disabled ? '0.3' : '1';
+  document.getElementById('zoomOutBtn').style.opacity = disabled ? '0.3' : '1';
+  document.getElementById('zoomResetBtn').style.opacity = disabled ? '0.3' : '1';
+  document.getElementById('zoomInBtn').style.cursor = disabled ? 'default' : 'pointer';
+  document.getElementById('zoomOutBtn').style.cursor = disabled ? 'default' : 'pointer';
+  document.getElementById('zoomResetBtn').style.cursor = disabled ? 'default' : 'pointer';
+}
+
 function zoomIn() {
+  if (STATE.frozen) return;
   const rect = canvasWrap.getBoundingClientRect();
   zoomTo(ZOOM.scale * 1.3, rect.left + rect.width / 2, rect.top + rect.height / 2);
 }
 
 function zoomOut() {
+  if (STATE.frozen) return;
   const rect = canvasWrap.getBoundingClientRect();
   zoomTo(ZOOM.scale / 1.3, rect.left + rect.width / 2, rect.top + rect.height / 2);
 }
 
 function zoomReset() {
+  if (STATE.frozen) return;
   ZOOM.scale = 1;
   ZOOM.offsetX = 0;
   ZOOM.offsetY = 0;
@@ -999,6 +1033,7 @@ var panState = { active: false, startX: 0, startY: 0, origX: 0, origY: 0 };
 
 canvasWrap.addEventListener('mousedown', function(e) {
   if (STATE.drawingActive) return; // let drawing handle it
+  if (STATE.frozen) return; // frozen — no pan
   if (ZOOM.scale <= 1) return; // no pan needed at 1x
   panState.active = true;
   panState.startX = e.clientX;
@@ -1025,6 +1060,7 @@ document.addEventListener('mouseup', function(e) {
 
 // Touch pinch-to-zoom
 canvasWrap.addEventListener('touchstart', function(e) {
+  if (STATE.frozen) return; // frozen — no touch zoom/pan
   if (e.touches.length === 2) {
     e.preventDefault();
     const dx = e.touches[0].clientX - e.touches[1].clientX;
@@ -1257,23 +1293,44 @@ document.getElementById('stopDrawingBtn').addEventListener('click',stopDrawingMo
 function startDrawingMode(){
   if(!STATE.imageLoaded){UI.toast('Upload an image first.','warn');return;}
   STATE.drawingActive=true;
+  STATE.frozen=true;
   document.getElementById('startDrawingBtn').style.display='none';
   document.getElementById('stopDrawingBtn').style.display='';
+  document.getElementById('freezeBtn').style.display='';
+  document.getElementById('freezeBtn').textContent='🔓 Unfreeze';
   document.getElementById('roiDrawingStatus').classList.add('visible');
   document.getElementById('canvasModeLabel').textContent='🔴 Drawing Active';
   updateCanvasCursor();
-  UI.toast('✏️ Draw mode active. Drag on the image to create regions continuously.','info');
+  updateZoomButtonStates();
+  UI.toast('✏️ Draw mode active. Image is frozen — drag to draw ROIs.','info');
 }
 
 function stopDrawingMode(){
-  STATE.drawingActive=false;STATE.dragStart=null;STATE.currentShape=null;
+  STATE.drawingActive=false;STATE.frozen=false;STATE.dragStart=null;STATE.currentShape=null;
   document.getElementById('startDrawingBtn').style.display='';
   document.getElementById('stopDrawingBtn').style.display='none';
+  document.getElementById('freezeBtn').style.display='none';
   document.getElementById('roiDrawingStatus').classList.remove('visible');
   document.getElementById('canvasModeLabel').textContent='▶ Enable Drawing';
   overlayCanvas.style.cursor='default';
   redrawOverlay();
+  updateZoomButtonStates();
 }
+
+// Freeze / Unfreeze toggle
+function toggleFreeze(){
+  STATE.frozen = !STATE.frozen;
+  var btn = document.getElementById('freezeBtn');
+  if(STATE.frozen){
+    btn.textContent = '🔓 Unfreeze';
+    UI.toast('📌 Image frozen — zoom/pan disabled. Draw ROIs now.','info');
+  } else {
+    btn.textContent = '📌 Freeze Image';
+    UI.toast('🔓 Image unfrozen — zoom/pan enabled.','info');
+  }
+  updateZoomButtonStates();
+}
+document.getElementById('freezeBtn').addEventListener('click', toggleFreeze);
 
 function updateCanvasCursor(){
   if(STATE.drawingActive) overlayCanvas.style.cursor='crosshair';
@@ -1337,6 +1394,13 @@ function onPointerUp(e){
 ['mousedown','touchstart'].forEach(e=>overlayCanvas.addEventListener(e,onPointerDown,{passive:false}));
 ['mousemove','touchmove'].forEach(e=>overlayCanvas.addEventListener(e,onPointerMove,{passive:false}));
 ['mouseup','touchend'].forEach(e=>overlayCanvas.addEventListener(e,onPointerUp,{passive:false}));
+
+// Prevent page scroll when frozen or drawing - document level
+document.addEventListener('touchmove', function(e) {
+  if (STATE.drawingActive || STATE.frozen) {
+    e.preventDefault();
+  }
+}, { passive: false });
 
 /* ── DRAW ALL REGIONS + LIVE SHAPE ── */
 function redrawOverlay(){
@@ -1652,10 +1716,42 @@ function exportVisualDataCSV() {
   downloadCSV([headers].concat(rows), 'ColoriSense_Visual_Data.csv');
 }
 
+/* Get responsive chart bar settings based on region count and screen width */
+function getResponsiveBarSettings(numRegions) {
+  var isMobile = window.innerWidth < 600;
+  var bp, cp, labelFS, dataLabelFS, tickFS, axisTitleFS;
+  if (numRegions <= 2) {
+    bp = isMobile ? 0.6 : 0.85;
+    cp = isMobile ? 0.6 : 0.75;
+  } else if (numRegions <= 4) {
+    bp = isMobile ? 0.5 : 0.7;
+    cp = isMobile ? 0.5 : 0.65;
+  } else if (numRegions <= 6) {
+    bp = isMobile ? 0.4 : 0.6;
+    cp = isMobile ? 0.4 : 0.55;
+  } else {
+    bp = isMobile ? 0.3 : 0.5;
+    cp = isMobile ? 0.3 : 0.45;
+  }
+  if (isMobile) {
+    labelFS = 11;
+    dataLabelFS = 9;
+    tickFS = 10;
+    axisTitleFS = 11;
+  } else {
+    labelFS = 16;
+    dataLabelFS = 13;
+    tickFS = 13;
+    axisTitleFS = 13;
+  }
+  return { barPercentage: bp, categoryPercentage: cp, labelFontSize: labelFS, dataLabelFontSize: dataLabelFS, tickFontSize: tickFS, axisTitleFontSize: axisTitleFS };
+}
+
 function renderAllVisCharts() {
   var regions = STATE.regions;
   var n = regions.length;
   if(n === 0) return;
+  var barS = getResponsiveBarSettings(n);
   
   // Destroy old instances
   Object.keys(visChartInstances).forEach(function(k) {
@@ -1685,9 +1781,9 @@ function renderAllVisCharts() {
     data: {
       labels: regions.map(function(r){return r.label;}),
       datasets: [
-        { label: 'Red', data: regions.map(function(r){return r.avgR;}), backgroundColor: '#e74c3c', borderColor: '#e74c3c', borderWidth: 0, borderRadius: 3, barPercentage: 0.85, categoryPercentage: 0.75 },
-        { label: 'Green', data: regions.map(function(r){return r.avgG;}), backgroundColor: '#27ae60', borderColor: '#27ae60', borderWidth: 0, borderRadius: 3, barPercentage: 0.85, categoryPercentage: 0.75 },
-        { label: 'Blue', data: regions.map(function(r){return r.avgB;}), backgroundColor: '#4A90D9', borderColor: '#4A90D9', borderWidth: 0, borderRadius: 3, barPercentage: 0.85, categoryPercentage: 0.75 }
+        { label: 'Red', data: regions.map(function(r){return r.avgR;}), backgroundColor: '#e74c3c', borderColor: '#e74c3c', borderWidth: 0, borderRadius: 3, barPercentage: barS.barPercentage, categoryPercentage: barS.categoryPercentage },
+        { label: 'Green', data: regions.map(function(r){return r.avgG;}), backgroundColor: '#27ae60', borderColor: '#27ae60', borderWidth: 0, borderRadius: 3, barPercentage: barS.barPercentage, categoryPercentage: barS.categoryPercentage },
+        { label: 'Blue', data: regions.map(function(r){return r.avgB;}), backgroundColor: '#4A90D9', borderColor: '#4A90D9', borderWidth: 0, borderRadius: 3, barPercentage: barS.barPercentage, categoryPercentage: barS.categoryPercentage }
       ]
     },
     options: {
@@ -1695,11 +1791,11 @@ function renderAllVisCharts() {
       plugins: {
         legend: { display: true, position: 'top', align: 'center', labels: { boxWidth: 14, boxHeight: 14, padding: 16, font: { size: 14, weight: '600' }, color: '#333', borderRadius: 3 } },
         tooltip: { enabled: true, backgroundColor: '#fff', titleColor: '#333', bodyColor: '#555', borderColor: '#ddd', borderWidth: 1, padding: 8, cornerRadius: 6 },
-        datalabels: { anchor: 'end', align: 'end', color: '#333', font: { size: 13, weight: '700' }, offset: 2, formatter: function(v){return v.toFixed(0);} }
+        datalabels: { anchor: 'end', align: 'end', color: '#333', font: { size: barS.dataLabelFontSize, weight: '700' }, offset: 2, formatter: function(v){return v.toFixed(0);} }
       },
       scales: {
-        y: { min: 0, max: 255, grid: { color: '#e5e5e5', drawBorder: false, lineWidth: 1 }, ticks: { font: { size: 13, weight: '500' }, color: '#555', stepSize: 51, padding: 4 }, title: { display: true, text: 'RGB Value (0\u2013255)', font: { size: 13, weight: '600' }, color: '#555' } },
-        x: { grid: { display: false }, ticks: { font: { size: 16, weight: '700' }, color: '#333', padding: 6 } }
+        y: { min: 0, max: 255, grid: { color: '#e5e5e5', drawBorder: false, lineWidth: 1 }, ticks: { font: { size: barS.tickFontSize, weight: '500' }, color: '#555', stepSize: 51, padding: 4 }, title: { display: true, text: 'RGB Value (0\u2013255)', font: { size: barS.axisTitleFontSize, weight: '600' }, color: '#555' } },
+        x: { grid: { display: false }, ticks: { font: { size: barS.labelFontSize, weight: '700' }, color: '#333', padding: 6 } }
       }
     }
   });
@@ -1710,9 +1806,9 @@ function renderAllVisCharts() {
     data: {
       labels: regions.map(function(r){return r.label;}),
       datasets: [
-        { label: 'Hue*/3.6', data: regions.map(function(r){return +(r.hsv.h / 3.6).toFixed(1);}), backgroundColor: '#F5A623', borderColor: '#F5A623', borderWidth: 0, borderRadius: 3, barPercentage: 0.85, categoryPercentage: 0.75 },
-        { label: 'Sat%', data: regions.map(function(r){return r.hsv.s;}), backgroundColor: '#2ECC71', borderColor: '#2ECC71', borderWidth: 0, borderRadius: 3, barPercentage: 0.85, categoryPercentage: 0.75 },
-        { label: 'Val%', data: regions.map(function(r){return r.hsv.v;}), backgroundColor: '#4A90D9', borderColor: '#4A90D9', borderWidth: 0, borderRadius: 3, barPercentage: 0.85, categoryPercentage: 0.75 }
+        { label: 'Hue*/3.6', data: regions.map(function(r){return +(r.hsv.h / 3.6).toFixed(1);}), backgroundColor: '#F5A623', borderColor: '#F5A623', borderWidth: 0, borderRadius: 3, barPercentage: barS.barPercentage, categoryPercentage: barS.categoryPercentage },
+        { label: 'Sat%', data: regions.map(function(r){return r.hsv.s;}), backgroundColor: '#2ECC71', borderColor: '#2ECC71', borderWidth: 0, borderRadius: 3, barPercentage: barS.barPercentage, categoryPercentage: barS.categoryPercentage },
+        { label: 'Val%', data: regions.map(function(r){return r.hsv.v;}), backgroundColor: '#4A90D9', borderColor: '#4A90D9', borderWidth: 0, borderRadius: 3, barPercentage: barS.barPercentage, categoryPercentage: barS.categoryPercentage }
       ]
     },
     options: {
@@ -1720,11 +1816,11 @@ function renderAllVisCharts() {
       plugins: {
         legend: { display: true, position: 'top', align: 'center', labels: { boxWidth: 14, boxHeight: 14, padding: 16, font: { size: 14, weight: '600' }, color: '#333', borderRadius: 3 } },
         tooltip: { enabled: true, backgroundColor: '#fff', titleColor: '#333', bodyColor: '#555', borderColor: '#ddd', borderWidth: 1, padding: 8, cornerRadius: 6, callbacks: { label: function(ctx){var v=ctx.parsed.y;if(ctx.dataset.label==='Hue*/3.6'){return 'Hue*/3.6: '+v.toFixed(1)+' (raw: '+(v*3.6).toFixed(1)+'\u00b0)';}return ctx.dataset.label+': '+v.toFixed(1)+'%';} } },
-        datalabels: { anchor: 'end', align: 'end', color: '#333', font: { size: 13, weight: '700' }, offset: 2, formatter: function(v,ctx){if(ctx.dataset.label==='Hue*/3.6'){return (v*3.6).toFixed(1);}return v.toFixed(1);} }
+        datalabels: { anchor: 'end', align: 'end', color: '#333', font: { size: barS.dataLabelFontSize, weight: '700' }, offset: 2, formatter: function(v,ctx){if(ctx.dataset.label==='Hue*/3.6'){return (v*3.6).toFixed(1);}return v.toFixed(1);} }
       },
       scales: {
-        y: { min: 0, max: 100, grid: { color: '#e5e5e5', drawBorder: false, lineWidth: 1 }, ticks: { font: { size: 13, weight: '500' }, color: '#555', stepSize: 20, padding: 4 }, title: { display: true, text: 'Normalized (0\u2013100)', font: { size: 13, weight: '600' }, color: '#555' } },
-        x: { grid: { display: false }, ticks: { font: { size: 16, weight: '700' }, color: '#333', padding: 6 } }
+        y: { min: 0, max: 100, grid: { color: '#e5e5e5', drawBorder: false, lineWidth: 1 }, ticks: { font: { size: barS.tickFontSize, weight: '500' }, color: '#555', stepSize: 20, padding: 4 }, title: { display: true, text: 'Normalized (0\u2013100)', font: { size: barS.axisTitleFontSize, weight: '600' }, color: '#555' } },
+        x: { grid: { display: false }, ticks: { font: { size: barS.labelFontSize, weight: '700' }, color: '#333', padding: 6 } }
       }
     }
   });
@@ -1736,7 +1832,7 @@ function renderAllVisCharts() {
       data: [+(r.hsv.h / 3.6).toFixed(1), r.hsv.s, r.hsv.v],
       backgroundColor: STATE.colors[i % STATE.colors.length],
       borderColor: STATE.colors[i % STATE.colors.length],
-      borderWidth: 0, borderRadius: 3, barPercentage: 0.8, categoryPercentage: 0.7, yAxisID: 'y'
+      borderWidth: 0, borderRadius: 3, barPercentage: barS.barPercentage, categoryPercentage: barS.categoryPercentage, yAxisID: 'y'
     };
   });
   // Add invisible dataset to force right axis
@@ -1753,12 +1849,12 @@ function renderAllVisCharts() {
       plugins: {
         legend: { display: true, position: 'top', align: 'center', labels: { boxWidth: 14, boxHeight: 14, padding: 16, font: { size: 14, weight: '600' }, color: '#333', borderRadius: 3, filter: function(item){return item.dataset && item.dataset.yAxisID !== 'yRight';} } },
         tooltip: { enabled: true, backgroundColor: '#fff', titleColor: '#333', bodyColor: '#555', borderColor: '#ddd', borderWidth: 1, padding: 8, cornerRadius: 6, callbacks: { label: function(ctx){if(ctx.dataset.yAxisID==='yRight')return null;var rn=ctx.dataset.label;var m=ctx.chart.data.labels[ctx.dataIndex];var rv;if(m==='Hue'){rv=STATE.regions.find(function(x){return x.label===rn;}).hsv.h.toFixed(1)+'\u00b0';}else if(m==='Saturation'){rv=STATE.regions.find(function(x){return x.label===rn;}).hsv.s.toFixed(1)+'%';}else{rv=STATE.regions.find(function(x){return x.label===rn;}).hsv.v.toFixed(1)+'%';}return rn+': '+rv;} } },
-        datalabels: { anchor: 'end', align: 'end', color: '#333', font: { size: 13, weight: '700' }, offset: 2, formatter: function(v,ctx){if(ctx.dataset.yAxisID==='yRight')return '';var rn=ctx.dataset.label;var m=ctx.chart.data.labels[ctx.dataIndex];var reg=STATE.regions.find(function(x){return x.label===rn;});if(m==='Hue')return reg.hsv.h.toFixed(1);else if(m==='Saturation')return reg.hsv.s.toFixed(1);else return reg.hsv.v.toFixed(1);} }
+        datalabels: { anchor: 'end', align: 'end', color: '#333', font: { size: barS.dataLabelFontSize, weight: '700' }, offset: 2, formatter: function(v,ctx){if(ctx.dataset.yAxisID==='yRight')return '';var rn=ctx.dataset.label;var m=ctx.chart.data.labels[ctx.dataIndex];var reg=STATE.regions.find(function(x){return x.label===rn;});if(m==='Hue')return reg.hsv.h.toFixed(1);else if(m==='Saturation')return reg.hsv.s.toFixed(1);else return reg.hsv.v.toFixed(1);} }
       },
       scales: {
-        y: { min: 0, max: 100, grid: { color: '#e5e5e5', drawBorder: false, lineWidth: 1 }, ticks: { font: { size: 13, weight: '500' }, color: '#555', stepSize: 20, padding: 4 }, title: { display: true, text: 'Sat% / Val%', font: { size: 13, weight: '600' }, color: '#555' } },
-        yRight: { position: 'right', min: 0, max: 360, grid: { display: false }, ticks: { font: { size: 13, weight: '500' }, color: '#888', stepSize: 60, padding: 4, callback: function(v){return v+'\u00b0';} }, title: { display: true, text: 'Hue\u00b0', font: { size: 13, weight: '600' }, color: '#888' } },
-        x: { grid: { display: false }, ticks: { font: { size: 16, weight: '700' }, color: '#333', padding: 6 } }
+        y: { min: 0, max: 100, grid: { color: '#e5e5e5', drawBorder: false, lineWidth: 1 }, ticks: { font: { size: barS.tickFontSize, weight: '500' }, color: '#555', stepSize: 20, padding: 4 }, title: { display: true, text: 'Sat% / Val%', font: { size: barS.axisTitleFontSize, weight: '600' }, color: '#555' } },
+        yRight: { position: 'right', min: 0, max: 360, grid: { display: false }, ticks: { font: { size: barS.tickFontSize, weight: '500' }, color: '#888', stepSize: 60, padding: 4, callback: function(v){return v+'\u00b0';} }, title: { display: true, text: 'Hue\u00b0', font: { size: barS.axisTitleFontSize, weight: '600' }, color: '#888' } },
+        x: { grid: { display: false }, ticks: { font: { size: barS.labelFontSize, weight: '700' }, color: '#333', padding: 6 } }
       }
     }
   });
@@ -1774,9 +1870,9 @@ function renderAllVisCharts() {
     data: {
       labels: regions.map(function(r){return r.label;}),
       datasets: [
-        { label: 'L* (Lightness)', data: labData.map(function(l){return l.L;}), backgroundColor: '#60c0ff', borderColor: '#60c0ff', borderWidth: 0, borderRadius: 3, barPercentage: 0.85, categoryPercentage: 0.75 },
-        { label: 'a* (G\u2192R)', data: labData.map(function(l){return l.a;}), backgroundColor: '#e84393', borderColor: '#e84393', borderWidth: 0, borderRadius: 3, barPercentage: 0.85, categoryPercentage: 0.75 },
-        { label: 'b* (B\u2192Y)', data: labData.map(function(l){return l.b;}), backgroundColor: '#f4a728', borderColor: '#f4a728', borderWidth: 0, borderRadius: 3, barPercentage: 0.85, categoryPercentage: 0.75 }
+        { label: 'L* (Lightness)', data: labData.map(function(l){return l.L;}), backgroundColor: '#60c0ff', borderColor: '#60c0ff', borderWidth: 0, borderRadius: 3, barPercentage: barS.barPercentage, categoryPercentage: barS.categoryPercentage },
+        { label: 'a* (G\u2192R)', data: labData.map(function(l){return l.a;}), backgroundColor: '#e84393', borderColor: '#e84393', borderWidth: 0, borderRadius: 3, barPercentage: barS.barPercentage, categoryPercentage: barS.categoryPercentage },
+        { label: 'b* (B\u2192Y)', data: labData.map(function(l){return l.b;}), backgroundColor: '#f4a728', borderColor: '#f4a728', borderWidth: 0, borderRadius: 3, barPercentage: barS.barPercentage, categoryPercentage: barS.categoryPercentage }
       ]
     },
     options: {
@@ -1784,11 +1880,11 @@ function renderAllVisCharts() {
       plugins: {
         legend: { display: true, position: 'top', align: 'center', labels: { boxWidth: 14, boxHeight: 14, padding: 16, font: { size: 14, weight: '600' }, color: '#333', borderRadius: 3 } },
         tooltip: { enabled: true, backgroundColor: '#fff', titleColor: '#333', bodyColor: '#555', borderColor: '#ddd', borderWidth: 1, padding: 8, cornerRadius: 6 },
-        datalabels: { anchor: 'end', align: 'end', color: '#333', font: { size: 13, weight: '700' }, offset: 2, formatter: function(v){return v.toFixed(1);} }
+        datalabels: { anchor: 'end', align: 'end', color: '#333', font: { size: barS.dataLabelFontSize, weight: '700' }, offset: 2, formatter: function(v){return v.toFixed(1);} }
       },
       scales: {
-        y: { min: -labMax*0.1, max: labMax, grid: { color: '#e5e5e5', drawBorder: false, lineWidth: 1 }, ticks: { font: { size: 13, weight: '500' }, color: '#555', padding: 4 }, title: { display: true, text: 'CIELAB Value', font: { size: 13, weight: '600' }, color: '#555' } },
-        x: { grid: { display: false }, ticks: { font: { size: 16, weight: '700' }, color: '#333', padding: 6 } }
+        y: { min: -labMax*0.1, max: labMax, grid: { color: '#e5e5e5', drawBorder: false, lineWidth: 1 }, ticks: { font: { size: barS.tickFontSize, weight: '500' }, color: '#555', padding: 4 }, title: { display: true, text: 'CIELAB Value', font: { size: barS.axisTitleFontSize, weight: '600' }, color: '#555' } },
+        x: { grid: { display: false }, ticks: { font: { size: barS.labelFontSize, weight: '700' }, color: '#333', padding: 6 } }
       }
     }
   });
