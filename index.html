@@ -2399,29 +2399,6 @@ const IronCalibration = (() => {
   const DEFAULT_CONCS = [100, 50, 25, 12.5, 6.25, 3.125, 1.5625, 0.78125];
   const DEFAULT_DILUTIONS = [1, 2, 4, 8, 16, 32, 64, 128];
   const DEFAULT_ABSORBANCES = [0.419, 0.386, 0.517, 0.407, 0.230, 0.316, 0.234, 0.122];
-
-  // Built-in default calibration model — works on any browser/site without rebuilding
-  const BUILTIN_MODEL = {
-    modelVersion: 'v1', active: true, isBuiltIn: true, wavelengthNm: 560,
-    stockConcentrationMgL: 100,
-    standards: [
-      { dilution: 'Stock', concentration: 100, absorbance560: 0.419 },
-      { dilution: '1:2', concentration: 50, absorbance560: 0.386 },
-      { dilution: '1:4', concentration: 25, absorbance560: 0.517 },
-      { dilution: '1:8', concentration: 12.5, absorbance560: 0.407 },
-      { dilution: '1:16', concentration: 6.25, absorbance560: 0.230 },
-      { dilution: '1:32', concentration: 3.125, absorbance560: 0.316 },
-      { dilution: '1:64', concentration: 1.5625, absorbance560: 0.234 },
-      { dilution: '1:128', concentration: 0.78125, absorbance560: 0.122 }
-    ],
-    selectedFeature: 'B', regressionType: 'linear',
-    coefficients: [-0.3, 70.0], intercept: 70.0,
-    equation: 'y = -0.3000x + 70.0000',
-    rSquared: 0.92, rmse: 8.5, mae: 6.2,
-    minimumConcentrationMgL: 0.78125, maximumConcentrationMgL: 100,
-    calibrationDate: '2026-01-01T00:00:00.000Z',
-    note: 'Built-in default model using known iron standards and 560nm spectrophotometric absorbance reference. The μPAD image calibration uses known iron concentrations and their measured color features.'
-  };
   let calImg = null, calRois = [], calDrawing = false, calDragStart = null, calCurrentShape = null;
   let sampleImg = null, sampleRois = [], sampleDrawing = false, sampleDragStart = null, sampleCurrentShape = null;
   const calCtx = (() => { const c = document.getElementById('ironCalImageCanvas'); return c ? c.getContext('2d') : null; })();
@@ -2435,25 +2412,11 @@ const IronCalibration = (() => {
   function isDevMode() { return get(DEV_MODE_KEY) === true; }
   function toggleDevMode() { const v = !isDevMode(); set(DEV_MODE_KEY, v); refreshIronTab(); return v; }
 
-  function getModel() {
-    var custom = get(STORAGE_KEY);
-    if (custom && custom.active) return custom;
-    return BUILTIN_MODEL;
-  }
-  function saveModel(model) {
-    model.isBuiltIn = false;
-    set(STORAGE_KEY, model);
-    UI.toast('✅ Custom calibration model saved! Default model replaced.', 'success');
-  }
-  function resetToBuiltin() {
-    localStorage.removeItem(STORAGE_KEY);
-    UI.toast('✅ Reset to built-in default calibration model.', 'success');
-    refreshIronTab();
-  }
+  function getModel() { return get(STORAGE_KEY); }
+  function saveModel(model) { set(STORAGE_KEY, model); }
 
   function refreshIronTab() {
     const dev = isDevMode();
-    // Calibration builder is always visible — dev mode toggle hides the toggle card
     document.getElementById('ironCalibrationSection').style.display = 'block';
     document.getElementById('ironDevModeToggleCard').style.display = dev ? 'none' : 'block';
     const model = getModel();
@@ -2664,12 +2627,12 @@ const IronCalibration = (() => {
     if (!el) return;
     if (sampleRois.length === 0) { el.innerHTML = ''; return; }
     var html = '<div class="section-title">Sample ROIs (' + sampleRois.length + ')</div>';
-    html += '<div class="results-table-wrap" style="overflow-x:auto"><table><thead><tr><th>#</th><th>Dilution</th><th>R</th><th>G</th><th>B</th><th>Action</th></tr></thead><tbody>';
+    html += '<div class="results-table-wrap" style="overflow-x:auto"><table><thead><tr><th>#</th><th>Dilution</th><th>R</th><th>G</th><th>B</th><th>H°</th><th>S%</th><th>V%</th><th>L*</th><th>a*</th><th>b*</th><th>Int.</th><th>Action</th></tr></thead><tbody>';
     sampleRois.forEach(function(roi, i) {
       var cd = roi.colorData || {};
       var defaultDil = i === 0 ? 2 : Math.pow(2, i + 1);
       var dil = roi.dilutionFactor || defaultDil;
-      html += '<tr><td>' + (i + 1) + '</td><td><select style="width:70px;padding:3px;font-size:11px" id="sampleDil_' + i + '"><option value="1"' + (dil==1?' selected':'') + '>1:1</option><option value="2"' + (dil==2?' selected':'') + '>1:2</option><option value="4"' + (dil==4?' selected':'') + '>1:4</option><option value="8"' + (dil==8?' selected':'') + '>1:8</option><option value="16"' + (dil==16?' selected':'') + '>1:16</option><option value="32"' + (dil==32?' selected':'') + '>1:32</option><option value="64"' + (dil==64?' selected':'') + '>1:64</option><option value="128"' + (dil==128?' selected':'') + '>1:128</option></select></td><td>' + (cd.avgR || '') + '</td><td>' + (cd.avgG || '') + '</td><td>' + (cd.avgB || '') + '</td><td><button class="btn btn-danger btn-sm" onclick="IronCalibration.deleteSampleRoi(' + i + ')" title="Delete">✕</button></td></tr>';
+      html += '<tr><td>' + (i + 1) + '</td><td><select style="width:70px;padding:3px;font-size:11px" id="sampleDil_' + i + '"><option value="1"' + (dil==1?' selected':'') + '>1:1</option><option value="2"' + (dil==2?' selected':'') + '>1:2</option><option value="4"' + (dil==4?' selected':'') + '>1:4</option><option value="8"' + (dil==8?' selected':'') + '>1:8</option><option value="16"' + (dil==16?' selected':'') + '>1:16</option><option value="32"' + (dil==32?' selected':'') + '>1:32</option><option value="64"' + (dil==64?' selected':'') + '>1:64</option><option value="128"' + (dil==128?' selected':'') + '>1:128</option></select></td><td>' + (cd.avgR || '') + '</td><td>' + (cd.avgG || '') + '</td><td>' + (cd.avgB || '') + '</td><td>' + (cd.hsv ? cd.hsv.h : '') + '</td><td>' + (cd.hsv ? cd.hsv.s : '') + '</td><td>' + (cd.hsv ? cd.hsv.v : '') + '</td><td>' + (cd.lab ? cd.lab.L : '') + '</td><td>' + (cd.lab ? cd.lab.a : '') + '</td><td>' + (cd.lab ? cd.lab.b : '') + '</td><td>' + (cd.intensity !== undefined ? cd.intensity.toFixed(2) : '') + '</td><td><button class="btn btn-danger btn-sm" onclick="IronCalibration.deleteSampleRoi(' + i + ')" title="Delete">✕</button></td></tr>';
     });
     html += '</tbody></table></div>';
     el.innerHTML = html;
@@ -2678,6 +2641,19 @@ const IronCalibration = (() => {
       var sel = document.getElementById('sampleDil_' + i);
       if (sel) sel.addEventListener('change', function() { roi.dilutionFactor = parseInt(this.value); renderSampleRois(); });
     });
+  }
+
+  function extractSampleRoiData(roi) {
+    const c = document.getElementById('ironImageCanvas');
+    if (!c) return null;
+    const raw = sampleCtx.getImageData(roi.x, roi.y, roi.w, roi.h).data;
+    let sR = 0, sG = 0, sB = 0, n = 0;
+    for (let i = 0; i < raw.length; i += 4) { sR += raw[i]; sG += raw[i + 1]; sB += raw[i + 2]; n++; }
+    if (n === 0) return null;
+    const aR = Math.round(sR / n), aG = Math.round(sG / n), aB = Math.round(sB / n);
+    const hsv = rgbToHsv(aR, aG, aB);
+    const lab = rgbToLab(aR, aG, aB);
+    return { avgR: aR, avgG: aG, avgB: aB, hex: '#' + [aR, aG, aB].map(function(v) { return v.toString(16).padStart(2, '0'); }).join(''), hsv: hsv, lab: lab, intensity: 0.299 * aR + 0.587 * aG + 0.114 * aB, pixelCount: n };
   }
 
   function deleteSampleRoi(idx) {
@@ -2864,7 +2840,7 @@ const IronCalibration = (() => {
       if (sampleCanvas) {
         function sDown(e) { if (!sampleDrawing) return; e.preventDefault(); sampleDragStart = getSampleCanvasPos(e); sampleCurrentShape = null; }
         function sMove(e) { if (!sampleDrawing || !sampleDragStart) return; e.preventDefault(); var p = getSampleCanvasPos(e); sampleCurrentShape = { x: Math.min(sampleDragStart.x, p.x), y: Math.min(sampleDragStart.y, p.y), w: Math.abs(p.x - sampleDragStart.x), h: Math.abs(p.y - sampleDragStart.y) }; renderSampleRois(); }
-        function sUp(e) { if (!sampleDrawing || !sampleDragStart) return; e.preventDefault(); var p = getSampleCanvasPos(e); var w = Math.abs(p.x - sampleDragStart.x), h = Math.abs(p.y - sampleDragStart.y); if (w > 10 && h > 10) { sampleRois.push({ x: Math.min(sampleDragStart.x, p.x), y: Math.min(sampleDragStart.y, p.y), w: w, h: h }); renderSampleRois(); } sampleDragStart = null; sampleCurrentShape = null; }
+        function sUp(e) { if (!sampleDrawing || !sampleDragStart) return; e.preventDefault(); var p = getSampleCanvasPos(e); var w = Math.abs(p.x - sampleDragStart.x), h = Math.abs(p.y - sampleDragStart.y); if (w > 10 && h > 10) { var roi = { x: Math.min(sampleDragStart.x, p.x), y: Math.min(sampleDragStart.y, p.y), w: w, h: h }; roi.colorData = extractSampleRoiData(roi); sampleRois.push(roi); renderSampleRois(); } sampleDragStart = null; sampleCurrentShape = null; }
         sampleCanvas.addEventListener('mousedown', sDown);
         sampleCanvas.addEventListener('mousemove', sMove);
         sampleCanvas.addEventListener('mouseup', sUp);
@@ -2892,7 +2868,7 @@ const IronCalibration = (() => {
     }, 100);
   }
 
-  return { init: init, refreshIronTab: refreshIronTab, toggleDevMode: toggleDevMode, isDevMode: isDevMode, deleteSampleRoi: deleteSampleRoi, resetToBuiltin: resetToBuiltin };
+  return { init: init, refreshIronTab: refreshIronTab, toggleDevMode: toggleDevMode, isDevMode: isDevMode, deleteSampleRoi: deleteSampleRoi };
 })();
 
 /* ── INIT ── */
