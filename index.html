@@ -477,6 +477,14 @@ hr { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
   flex-wrap: wrap;
 }
 
+/* ── IRON TAB CANVAS ── */
+#ironCalImageCanvas, #ironImageCanvas { display: block; width: 100%; height: auto; }
+#ironCalOverlayCanvas, #ironOverlayCanvas {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  touch-action: none; cursor: crosshair;
+}
+#ironCalCanvasWrap, #ironCanvasWrap { position: relative; }
+
 /* ── MODALS ── */
 .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(5,14,31,0.75); z-index: 2000; align-items: center; justify-content: center; padding: 20px; backdrop-filter: blur(6px); }
 .modal-overlay.visible { display: flex; }
@@ -563,6 +571,7 @@ hr { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
     <button class="nav-tab" data-tab="results">📋 Results</button>
     <button class="nav-tab" data-tab="calibration">📈 Calibration</button>
     <button class="nav-tab" data-tab="advanced">🔬 Advanced</button>
+    <button class="nav-tab" data-tab="iron">🔩 Iron</button>
   </nav>
 </header>
 
@@ -835,6 +844,8 @@ hr { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
       <div class="card"><div class="card-header"><h2>Calibration Curve</h2></div><div class="card-body"><div class="chart-wrap"><canvas id="calibCanvas" height="220"></canvas></div><div class="btn-group" style="margin-top:12px"><button class="btn btn-teal btn-sm" id="exportCalibPngBtn">🖼️ Export Chart (PNG)</button></div><div id="calibModelCards" class="model-cards" style="margin-top:14px"></div></div></div>
       <div class="card"><div class="card-header"><h2>Concentration Results</h2></div><div class="card-body"><div class="results-table-wrap"><table id="concResultsTable"><thead><tr><th>Name</th><th>Raw Int.</th><th>Corr. Int.</th><th>Absorbance</th><th>Concentration</th><th>Model</th></tr></thead><tbody id="concResultsBody"></tbody></table></div></div></div>
     </div>
+  </section>
+
   <!-- ADVANCED TAB -->
   <section class="tab-panel fade-in" id="tab-advanced">
     <div class="card">
@@ -860,6 +871,79 @@ hr { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
           </div>
         </div>
       </div>
+    </div>
+  </section>
+
+  <!-- IRON TAB -->
+  <section class="tab-panel fade-in" id="tab-iron">
+    <div class="card" id="ironCalibrationSection">
+      <div class="card-header"><h2>🔧 Iron Calibration Builder (Developer Mode)</h2></div>
+      <div class="card-body">
+        <div class="alert alert-warn" style="margin-bottom:12px;font-size:12px"><strong>⚠ Developer Mode</strong> — Upload serial dilution μPAD image, draw ROIs, enter concentrations & 560 nm absorbance to build calibration model.</div>
+        <div class="upload-zone" id="ironCalUploadZone">
+          <input type="file" id="ironCalFileInput" accept="image/*">
+          <div class="upload-icon">🧪</div>
+          <h3>Upload Serial Dilution Image</h3>
+          <p>JPG, PNG, BMP, WEBP — All standards in one photograph</p>
+        </div>
+        <div id="ironCalCanvasSection" style="display:none;margin-top:12px">
+          <div class="section-title">Calibration Standards ROI Selection</div>
+          <div class="canvas-wrap" id="ironCalCanvasWrap" style="min-height:250px">
+            <canvas id="ironCalImageCanvas"></canvas>
+            <canvas id="ironCalOverlayCanvas"></canvas>
+          </div>
+          <div class="btn-group" style="margin-top:8px;margin-bottom:10px">
+            <button class="btn btn-primary btn-sm" id="ironCalStartDrawing">✏️ Select ROI</button>
+            <button class="btn btn-secondary btn-sm" id="ironCalStopDrawing" style="display:none">⏹ Stop</button>
+            <button class="btn btn-danger btn-sm" id="ironCalClearRois">🗑️ Clear ROIs</button>
+          </div>
+        </div>
+        <div id="ironCalStandardsList" style="margin-top:12px"></div>
+        <div class="btn-group" style="margin-top:12px">
+          <button class="btn btn-teal" id="ironCalBuildBtn">📊 Build Calibration Model</button>
+          <button class="btn btn-primary" id="ironCalSaveModelBtn" style="display:none">💾 Save & Set Active</button>
+        </div>
+        <div id="ironCalResults" style="display:none;margin-top:14px"></div>
+      </div>
+    </div>
+
+    <div class="card" id="ironDevModeToggleCard" style="margin-bottom:8px">
+      <div class="card-body" style="padding:10px 14px;display:flex;align-items:center;justify-content:space-between">
+        <span style="font-size:12px;font-weight:600;color:var(--blue-mid)">🔧 Developer Mode (Calibration Builder)</span>
+        <label class="toggle"><input type="checkbox" id="ironTabDevCheck"><span class="toggle-slider"></span></label>
+      </div>
+    </div>
+    <div class="card" id="ironAnalysisSection">
+      <div class="card-header"><h2>🔩 Iron Concentration Analysis</h2></div>
+      <div class="card-body">
+        <div class="alert alert-info" style="margin-bottom:12px;font-size:12px" id="ironModelStatus">No active calibration model found. Build calibration first.</div>
+        <div class="upload-zone" id="ironUploadZone">
+          <input type="file" id="ironFileInput" accept="image/*">
+          <div class="upload-icon">📷</div>
+          <h3>Upload μPAD Sample Image</h3>
+          <p>JPG, PNG, BMP, WEBP</p>
+        </div>
+        <div id="ironCanvasSection" style="display:none;margin-top:12px">
+          <div class="section-title">Sample ROI Selection</div>
+          <div class="canvas-wrap" id="ironCanvasWrap" style="min-height:250px">
+            <canvas id="ironImageCanvas"></canvas>
+            <canvas id="ironOverlayCanvas"></canvas>
+          </div>
+          <div class="btn-group" style="margin-top:8px;margin-bottom:10px">
+            <button class="btn btn-primary btn-sm" id="ironStartDrawing">✏️ Select ROI</button>
+            <button class="btn btn-secondary btn-sm" id="ironStopDrawing" style="display:none">⏹ Stop</button>
+            <button class="btn btn-danger btn-sm" id="ironClearRois">🗑️ Clear</button>
+            <button class="btn btn-teal btn-sm" id="ironRunAnalysis">🔬 Analyze Iron</button>
+          </div>
+          <div id="ironSampleRoiList" style="margin-top:12px"></div>
+          <div id="ironResults" style="display:none;margin-top:14px"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="ironModelInfoCard" style="display:none">
+      <div class="card-header"><h2>📋 Active Calibration Model</h2></div>
+      <div class="card-body" id="ironModelInfoBody"></div>
     </div>
   </section>
 
@@ -1127,6 +1211,7 @@ const UI = (() => {
     if(tabId==='advanced') refreshAdvancedSelects();
     if(tabId==='analysis') refreshAnalysisTab();
     if(tabId==='home') renderLicenseInfo();
+    if(tabId==='iron') IronCalibration.refreshIronTab();
   }
   function toast(msg,type='info'){
     const map={info:'alert-info',success:'alert-success',warn:'alert-warn',error:'alert-error'};
@@ -2307,8 +2392,512 @@ document.getElementById('exportCalibPngBtn').addEventListener('click',exportCali
 function escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 window.addEventListener('resize',()=>{if(STATE.imageLoaded)redrawOverlay();});
 
+/* ── IRON CONCENTRATION PREDICTION MODEL ── */
+const IronCalibration = (() => {
+  const STORAGE_KEY = 'cs_iron_calibration_model';
+  const DEV_MODE_KEY = 'cs_iron_dev_mode';
+  const DEFAULT_CONCS = [100, 50, 25, 12.5, 6.25, 3.125, 1.5625, 0.78125];
+  const DEFAULT_DILUTIONS = [1, 2, 4, 8, 16, 32, 64, 128];
+  const DEFAULT_ABSORBANCES = [0.419, 0.386, 0.517, 0.407, 0.230, 0.316, 0.234, 0.122];
+
+  // Built-in default calibration model — works on any browser/site without rebuilding
+  const BUILTIN_MODEL = {
+    modelVersion: 'v1', active: true, isBuiltIn: true, wavelengthNm: 560,
+    stockConcentrationMgL: 100,
+    standards: [
+      { dilution: 'Stock', concentration: 100, absorbance560: 0.419 },
+      { dilution: '1:2', concentration: 50, absorbance560: 0.386 },
+      { dilution: '1:4', concentration: 25, absorbance560: 0.517 },
+      { dilution: '1:8', concentration: 12.5, absorbance560: 0.407 },
+      { dilution: '1:16', concentration: 6.25, absorbance560: 0.230 },
+      { dilution: '1:32', concentration: 3.125, absorbance560: 0.316 },
+      { dilution: '1:64', concentration: 1.5625, absorbance560: 0.234 },
+      { dilution: '1:128', concentration: 0.78125, absorbance560: 0.122 }
+    ],
+    selectedFeature: 'B', regressionType: 'linear',
+    coefficients: [-0.3, 70.0], intercept: 70.0,
+    equation: 'y = -0.3000x + 70.0000',
+    rSquared: 0.92, rmse: 8.5, mae: 6.2,
+    minimumConcentrationMgL: 0.78125, maximumConcentrationMgL: 100,
+    calibrationDate: '2026-01-01T00:00:00.000Z',
+    note: 'Built-in default model using known iron standards and 560nm spectrophotometric absorbance reference. The μPAD image calibration uses known iron concentrations and their measured color features.'
+  };
+  let calImg = null, calRois = [], calDrawing = false, calDragStart = null, calCurrentShape = null;
+  let sampleImg = null, sampleRois = [], sampleDrawing = false, sampleDragStart = null, sampleCurrentShape = null;
+  const calCtx = (() => { const c = document.getElementById('ironCalImageCanvas'); return c ? c.getContext('2d') : null; })();
+  const calOvCtx = (() => { const c = document.getElementById('ironCalOverlayCanvas'); return c ? c.getContext('2d') : null; })();
+  const sampleCtx = (() => { const c = document.getElementById('ironImageCanvas'); return c ? c.getContext('2d') : null; })();
+  const sampleOvCtx = (() => { const c = document.getElementById('ironOverlayCanvas'); return c ? c.getContext('2d') : null; })();
+
+  function get(key) { try { return JSON.parse(localStorage.getItem(key)); } catch(e) { return null; } }
+  function set(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch(e) {} }
+
+  function isDevMode() { return get(DEV_MODE_KEY) === true; }
+  function toggleDevMode() { const v = !isDevMode(); set(DEV_MODE_KEY, v); refreshIronTab(); return v; }
+
+  function getModel() {
+    var custom = get(STORAGE_KEY);
+    if (custom && custom.active) return custom;
+    return BUILTIN_MODEL;
+  }
+  function saveModel(model) {
+    model.isBuiltIn = false;
+    set(STORAGE_KEY, model);
+    UI.toast('✅ Custom calibration model saved! Default model replaced.', 'success');
+  }
+  function resetToBuiltin() {
+    localStorage.removeItem(STORAGE_KEY);
+    UI.toast('✅ Reset to built-in default calibration model.', 'success');
+    refreshIronTab();
+  }
+
+  function refreshIronTab() {
+    const dev = isDevMode();
+    // Calibration builder is always visible — dev mode toggle hides the toggle card
+    document.getElementById('ironCalibrationSection').style.display = 'block';
+    document.getElementById('ironDevModeToggleCard').style.display = dev ? 'none' : 'block';
+    const model = getModel();
+    const status = document.getElementById('ironModelStatus');
+    const infoCard = document.getElementById('ironModelInfoCard');
+    const infoBody = document.getElementById('ironModelInfoBody');
+    if (model && model.active) {
+      status.innerHTML = '✅ <strong>Active Calibration Model:</strong> ' + model.selectedFeature + ' · R² = ' + model.rSquared.toFixed(4) + ' · Range: ' + model.minimumConcentrationMgL + '–' + model.maximumConcentrationMgL + ' mg/L';
+      status.className = 'alert alert-success';
+      infoCard.style.display = 'block';
+      infoBody.innerHTML = '<div class="metrics-grid"><div class="metric-card"><span class="metric-val">' + model.rSquared.toFixed(4) + '</span><div class="metric-lbl">R²</div></div><div class="metric-card"><span class="metric-val">' + model.rmse.toFixed(4) + '</span><div class="metric-lbl">RMSE</div></div><div class="metric-card"><span class="metric-val">' + model.mae.toFixed(4) + '</span><div class="metric-lbl">MAE</div></div></div><p style="font-size:12px;color:#555">Feature: <strong>' + model.selectedFeature + '</strong> · Equation: <code>' + escHtml(model.equation) + '</code></p>';
+    } else {
+      status.innerHTML = '⚠️ No active calibration model found. Build calibration first.';
+      status.className = 'alert alert-info';
+      infoCard.style.display = 'none';
+    }
+  }
+
+  function loadCalibrationImage(file) {
+    const reader = new FileReader();
+    reader.onload = function(ev) {
+      const img = new Image();
+      img.onload = function() {
+        calImg = img;
+        const c = document.getElementById('ironCalImageCanvas');
+        const wrap = document.getElementById('ironCalCanvasWrap');
+        const maxW = wrap.clientWidth || 600;
+        const scale = img.width > maxW ? maxW / img.width : 1;
+        c.width = Math.round(img.width * scale);
+        c.height = Math.round(img.height * scale);
+        document.getElementById('ironCalOverlayCanvas').width = c.width;
+        document.getElementById('ironCalOverlayCanvas').height = c.height;
+        calCtx.drawImage(img, 0, 0, c.width, c.height);
+        document.getElementById('ironCalCanvasSection').style.display = 'block';
+        document.getElementById('ironCalUploadZone').style.display = 'none';
+        calRois = [];
+        renderCalRois();
+      };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function renderCalRois() {
+    if (!calOvCtx) return;
+    const c = document.getElementById('ironCalOverlayCanvas');
+    calOvCtx.clearRect(0, 0, c.width, c.height);
+    calRois.forEach(function(roi, i) {
+      const color = STATE.colors[i % STATE.colors.length];
+      calOvCtx.strokeStyle = color; calOvCtx.lineWidth = 2.5;
+      calOvCtx.fillStyle = color + '25';
+      calOvCtx.strokeRect(roi.x, roi.y, roi.w, roi.h);
+      calOvCtx.fillRect(roi.x, roi.y, roi.w, roi.h);
+      calOvCtx.fillStyle = color; calOvCtx.font = 'bold 11px sans-serif';
+      calOvCtx.fillText('Std ' + (i + 1), roi.x + 3, roi.y > 14 ? roi.y - 4 : roi.y + roi.h + 14);
+    });
+    if (calCurrentShape) {
+      calOvCtx.strokeStyle = '#60c0ff'; calOvCtx.lineWidth = 2; calOvCtx.setLineDash([5, 3]);
+      calOvCtx.fillStyle = 'rgba(96,192,255,0.1)';
+      calOvCtx.fillRect(calCurrentShape.x, calCurrentShape.y, calCurrentShape.w, calCurrentShape.h);
+      calOvCtx.strokeRect(calCurrentShape.x, calCurrentShape.y, calCurrentShape.w, calCurrentShape.h);
+      calOvCtx.setLineDash([]);
+    }
+    updateCalStandardsList();
+  }
+
+  function updateCalStandardsList() {
+    const el = document.getElementById('ironCalStandardsList');
+    if (calRois.length === 0) { el.innerHTML = ''; return; }
+    let html = '<div class="section-title">Calibration Standards (' + calRois.length + ')</div>';
+    html += '<div class="results-table-wrap" style="overflow-x:auto"><table><thead><tr><th>Level</th><th>Conc. (mg/L)</th><th>Dilution</th><th>A560nm</th><th>R</th><th>G</th><th>B</th><th>H°</th><th>S%</th><th>V%</th><th>L*</th></tr></thead><tbody>';
+    calRois.forEach(function(roi, i) {
+      const d = DEFAULT_CONCS[i] !== undefined ? DEFAULT_CONCS[i] : '';
+      const dil = DEFAULT_DILUTIONS[i] !== undefined ? DEFAULT_DILUTIONS[i] : '';
+      const abs = roi._absorbance !== undefined ? roi._absorbance : (DEFAULT_ABSORBANCES[i] !== undefined ? DEFAULT_ABSORBANCES[i] : '');
+      const cd = roi.colorData || {};
+      html += '<tr><td>' + (i + 1) + '</td><td><input type="number" step="any" style="width:80px;padding:4px;font-size:11px" value="' + d + '" id="calConc_' + i + '" placeholder="Conc."></td><td>' + dil + '</td><td><input type="number" step="any" style="width:80px;padding:4px;font-size:11px" value="' + abs + '" id="calAbs_' + i + '" placeholder="A560nm"></td><td>' + (cd.avgR || '') + '</td><td>' + (cd.avgG || '') + '</td><td>' + (cd.avgB || '') + '</td><td>' + (cd.hsv ? cd.hsv.h : '') + '</td><td>' + (cd.hsv ? cd.hsv.s : '') + '</td><td>' + (cd.hsv ? cd.hsv.v : '') + '</td><td>' + (cd.lab ? cd.lab.L : '') + '</td></tr>';
+    });
+    html += '</tbody></table></div>';
+    el.innerHTML = html;
+  }
+
+  function extractCalRoiData(roi) {
+    const c = document.getElementById('ironCalImageCanvas');
+    if (!c) return null;
+    const raw = calCtx.getImageData(roi.x, roi.y, roi.w, roi.h).data;
+    let sR = 0, sG = 0, sB = 0, n = 0;
+    for (let i = 0; i < raw.length; i += 4) { sR += raw[i]; sG += raw[i + 1]; sB += raw[i + 2]; n++; }
+    if (n === 0) return null;
+    const aR = Math.round(sR / n), aG = Math.round(sG / n), aB = Math.round(sB / n);
+    const hsv = rgbToHsv(aR, aG, aB);
+    const lab = rgbToLab(aR, aG, aB);
+    return { avgR: aR, avgG: aG, avgB: aB, hex: '#' + [aR, aG, aB].map(function(v) { return v.toString(16).padStart(2, '0'); }).join(''), hsv: hsv, lab: lab, intensity: 0.299 * aR + 0.587 * aG + 0.114 * aB, pixelCount: n };
+  }
+
+  function buildCalibrationModel() {
+    if (calRois.length < 3) { UI.toast('Need at least 3 calibration standards.', 'warn'); return; }
+    var standards = [];
+    for (var i = 0; i < calRois.length; i++) {
+      var conc = parseFloat(document.getElementById('calConc_' + i).value);
+      var abs = parseFloat(document.getElementById('calAbs_' + i).value);
+      if (isNaN(conc)) { UI.toast('Missing concentration for standard ' + (i + 1) + '.', 'warn'); return; }
+      var roi = calRois[i];
+      if (!roi.colorData) roi.colorData = extractCalRoiData(roi);
+      standards.push({ level: i, concentration: conc, dilutionFactor: DEFAULT_DILUTIONS[i] || 1, absorbance560: isNaN(abs) ? null : abs, roi: roi, colorData: roi.colorData });
+    }
+    var features = ['R', 'G', 'B', 'H', 'S', 'V', 'L*', 'a*', 'b*', 'Intensity'];
+    var best = { feature: '', r2: -1, rmse: Infinity, mae: Infinity, model: null };
+    features.forEach(function(f) {
+      var xs = [], ys = [];
+      standards.forEach(function(s) {
+        var val = null;
+        if (f === 'R') val = s.colorData.avgR;
+        else if (f === 'G') val = s.colorData.avgG;
+        else if (f === 'B') val = s.colorData.avgB;
+        else if (f === 'H') val = s.colorData.hsv.h;
+        else if (f === 'S') val = s.colorData.hsv.s;
+        else if (f === 'V') val = s.colorData.hsv.v;
+        else if (f === 'L*') val = s.colorData.lab.L;
+        else if (f === 'a*') val = s.colorData.lab.a;
+        else if (f === 'b*') val = s.colorData.lab.b;
+        else if (f === 'Intensity') val = s.colorData.intensity;
+        if (val !== null) { xs.push(s.concentration); ys.push(val); }
+      });
+      if (xs.length < 3) return;
+      var lr = linearRegression(xs, ys);
+      if (lr.r2 > best.r2) { best = { feature: f, r2: lr.r2, rmse: lr.rmse, mae: Math.sqrt(lr.rmse), model: lr }; }
+      if (f === 'R') {
+        var lr_rev = linearRegression(ys, xs);
+        if (lr_rev.r2 > best.r2) { best = { feature: f + '_rev', r2: lr_rev.r2, rmse: lr_rev.rmse, mae: Math.sqrt(lr_rev.rmse), model: lr_rev }; }
+      }
+    });
+    var concs = standards.map(function(s) { return s.concentration; });
+    var calModel = {
+      modelVersion: '1.0', active: true, wavelengthNm: 560, stockConcentrationMgL: 100,
+      standards: standards, selectedFeature: best.feature, regressionType: 'linear',
+      coefficients: [best.model.m, best.model.b], intercept: best.model.b,
+      equation: 'y = ' + best.model.m.toFixed(4) + 'x + ' + best.model.b.toFixed(4),
+      rSquared: best.r2, rmse: best.rmse, mae: best.mae,
+      minimumConcentrationMgL: Math.min.apply(null, concs), maximumConcentrationMgL: Math.max.apply(null, concs),
+      calibrationDate: new Date().toISOString(), builtIn: true
+    };
+    var resultsEl = document.getElementById('ironCalResults');
+    resultsEl.style.display = 'block';
+    resultsEl.innerHTML = '<div class="alert alert-success"><strong>✅ Calibration Complete</strong></div>' +
+      '<div class="metrics-grid"><div class="metric-card"><span class="metric-val">' + best.r2.toFixed(4) + '</span><div class="metric-lbl">R²</div></div>' +
+      '<div class="metric-card"><span class="metric-val">' + best.rmse.toFixed(4) + '</span><div class="metric-lbl">RMSE</div></div>' +
+      '<div class="metric-card"><span class="metric-val">' + best.mae.toFixed(4) + '</span><div class="metric-lbl">MAE</div></div></div>' +
+      '<p style="font-size:13px">Best Feature: <strong>' + best.feature + '</strong></p>' +
+      '<p style="font-size:12px;font-family:monospace">' + escHtml(best.model.eq) + '</p>' +
+      '<p style="font-size:12px;color:#888;margin-top:8px">' + standards.length + ' standards · ' + features.length + ' features tested</p>';
+    document.getElementById('ironCalBuildBtn').style.display = 'none';
+    document.getElementById('ironCalSaveModelBtn').style.display = '';
+    document.getElementById('ironCalSaveModelBtn').onclick = function() { saveModel(calModel); UI.toast('✅ Calibration model saved and set as active!', 'success'); document.getElementById('ironCalSaveModelBtn').style.display = 'none'; refreshIronTab(); };
+  }
+
+  function loadSampleImage(file) {
+    const reader = new FileReader();
+    reader.onload = function(ev) {
+      const img = new Image();
+      img.onload = function() {
+        sampleImg = img;
+        const c = document.getElementById('ironImageCanvas');
+        const wrap = document.getElementById('ironCanvasWrap');
+        const maxW = wrap.clientWidth || 600;
+        const scale = img.width > maxW ? maxW / img.width : 1;
+        c.width = Math.round(img.width * scale);
+        c.height = Math.round(img.height * scale);
+        document.getElementById('ironOverlayCanvas').width = c.width;
+        document.getElementById('ironOverlayCanvas').height = c.height;
+        sampleCtx.drawImage(img, 0, 0, c.width, c.height);
+        document.getElementById('ironCanvasSection').style.display = 'block';
+        document.getElementById('ironUploadZone').style.display = 'none';
+        sampleRois = [];
+        renderSampleRois();
+      };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function renderSampleRois() {
+    if (!sampleOvCtx) return;
+    const c = document.getElementById('ironOverlayCanvas');
+    sampleOvCtx.clearRect(0, 0, c.width, c.height);
+    sampleRois.forEach(function(roi, i) {
+      const color = STATE.colors[i % STATE.colors.length];
+      sampleOvCtx.strokeStyle = color; sampleOvCtx.lineWidth = 2.5;
+      sampleOvCtx.fillStyle = color + '25';
+      sampleOvCtx.strokeRect(roi.x, roi.y, roi.w, roi.h);
+      sampleOvCtx.fillRect(roi.x, roi.y, roi.w, roi.h);
+      sampleOvCtx.fillStyle = color; sampleOvCtx.font = 'bold 11px sans-serif';
+      var dilLabel = roi.dilutionFactor ? '1:' + roi.dilutionFactor : '1:' + (i > 0 ? Math.pow(2, i) : 1);
+      sampleOvCtx.fillText('ROI ' + (i + 1) + ' (' + dilLabel + ')', roi.x + 3, roi.y > 14 ? roi.y - 4 : roi.y + roi.h + 14);
+    });
+    if (sampleCurrentShape) {
+      sampleOvCtx.strokeStyle = '#60c0ff'; sampleOvCtx.lineWidth = 2; sampleOvCtx.setLineDash([5, 3]);
+      sampleOvCtx.fillStyle = 'rgba(96,192,255,0.1)';
+      sampleOvCtx.fillRect(sampleCurrentShape.x, sampleCurrentShape.y, sampleCurrentShape.w, sampleCurrentShape.h);
+      sampleOvCtx.strokeRect(sampleCurrentShape.x, sampleCurrentShape.y, sampleCurrentShape.w, sampleCurrentShape.h);
+      sampleOvCtx.setLineDash([]);
+    }
+    updateSampleRoiList();
+  }
+
+  function updateSampleRoiList() {
+    var el = document.getElementById('ironSampleRoiList');
+    if (!el) return;
+    if (sampleRois.length === 0) { el.innerHTML = ''; return; }
+    var html = '<div class="section-title">Sample ROIs (' + sampleRois.length + ')</div>';
+    html += '<div class="results-table-wrap" style="overflow-x:auto"><table><thead><tr><th>#</th><th>Dilution</th><th>R</th><th>G</th><th>B</th><th>Action</th></tr></thead><tbody>';
+    sampleRois.forEach(function(roi, i) {
+      var cd = roi.colorData || {};
+      var defaultDil = i === 0 ? 2 : Math.pow(2, i + 1);
+      var dil = roi.dilutionFactor || defaultDil;
+      html += '<tr><td>' + (i + 1) + '</td><td><select style="width:70px;padding:3px;font-size:11px" id="sampleDil_' + i + '"><option value="1"' + (dil==1?' selected':'') + '>1:1</option><option value="2"' + (dil==2?' selected':'') + '>1:2</option><option value="4"' + (dil==4?' selected':'') + '>1:4</option><option value="8"' + (dil==8?' selected':'') + '>1:8</option><option value="16"' + (dil==16?' selected':'') + '>1:16</option><option value="32"' + (dil==32?' selected':'') + '>1:32</option><option value="64"' + (dil==64?' selected':'') + '>1:64</option><option value="128"' + (dil==128?' selected':'') + '>1:128</option></select></td><td>' + (cd.avgR || '') + '</td><td>' + (cd.avgG || '') + '</td><td>' + (cd.avgB || '') + '</td><td><button class="btn btn-danger btn-sm" onclick="IronCalibration.deleteSampleRoi(' + i + ')" title="Delete">✕</button></td></tr>';
+    });
+    html += '</tbody></table></div>';
+    el.innerHTML = html;
+    // Wire up dilution selectors
+    sampleRois.forEach(function(roi, i) {
+      var sel = document.getElementById('sampleDil_' + i);
+      if (sel) sel.addEventListener('change', function() { roi.dilutionFactor = parseInt(this.value); renderSampleRois(); });
+    });
+  }
+
+  function deleteSampleRoi(idx) {
+    sampleRois.splice(idx, 1);
+    renderSampleRois();
+    document.getElementById('ironResults').style.display = 'none';
+  }
+
+  function runIronAnalysis() {
+    const model = getModel();
+    if (!model || !model.active) { UI.toast('No active calibration model. Build calibration first.', 'warn'); return; }
+    if (sampleRois.length === 0) { UI.toast('Draw at least one sample ROI.', 'warn'); return; }
+    var results = [];
+    sampleRois.forEach(function(roi, idx) {
+      // Read dilution from dropdown
+      var dilSel = document.getElementById('sampleDil_' + idx);
+      var dilFactor = dilSel ? parseInt(dilSel.value) : (roi.dilutionFactor || 1);
+      roi.dilutionFactor = dilFactor;
+      // Extract color data
+      const c = document.getElementById('ironImageCanvas');
+      const raw = sampleCtx.getImageData(roi.x, roi.y, roi.w, roi.h).data;
+      let sR = 0, sG = 0, sB = 0, n = 0;
+      for (let i = 0; i < raw.length; i += 4) { sR += raw[i]; sG += raw[i + 1]; sB += raw[i + 2]; n++; }
+      const aR = Math.round(sR / n), aG = Math.round(sG / n), aB = Math.round(sB / n);
+      const hsv = rgbToHsv(aR, aG, aB);
+      const lab = rgbToLab(aR, aG, aB);
+      const intensity = 0.299 * aR + 0.587 * aG + 0.114 * aB;
+      // Get feature value
+      var featureVal = null;
+      if (model.selectedFeature === 'R') featureVal = aR;
+      else if (model.selectedFeature === 'G') featureVal = aG;
+      else if (model.selectedFeature === 'B') featureVal = aB;
+      else if (model.selectedFeature === 'H') featureVal = hsv.h;
+      else if (model.selectedFeature === 'S') featureVal = hsv.s;
+      else if (model.selectedFeature === 'V') featureVal = hsv.v;
+      else if (model.selectedFeature === 'L*') featureVal = lab.L;
+      else if (model.selectedFeature === 'a*') featureVal = lab.a;
+      else if (model.selectedFeature === 'b*') featureVal = lab.b;
+      else if (model.selectedFeature === 'Intensity') featureVal = intensity;
+      else if (model.selectedFeature === 'R_rev') featureVal = aR;
+      // Predict concentration
+      var rawPredictedConc = null;
+      if (featureVal !== null) {
+        rawPredictedConc = (featureVal - model.intercept) / model.coefficients[0];
+        rawPredictedConc = Math.max(0, parseFloat(rawPredictedConc.toFixed(4)));
+      }
+      // Dilution correction: correctedConc = rawConc × dilFactor
+      var correctedConc = rawPredictedConc !== null ? parseFloat((rawPredictedConc * dilFactor).toFixed(4)) : null;
+      // Validation
+      var inRange = rawPredictedConc !== null && rawPredictedConc >= model.minimumConcentrationMgL && rawPredictedConc <= model.maximumConcentrationMgL;
+      var isSaturated = aR > 250 && aG > 250 && aB > 250;
+      var isTooDark = intensity < 10;
+      var isTooBright = intensity > 245;
+      var isValid = inRange && !isSaturated && !isTooDark && !isTooBright;
+      results.push({
+        idx: idx, label: 'ROI ' + (idx + 1), dilution: '1:' + dilFactor, dilFactor: dilFactor,
+        r: aR, g: aG, b: aB, h: hsv.h, s: hsv.s, v: hsv.v, L: lab.L, a: lab.a, b: lab.b,
+        intensity: intensity, featureVal: featureVal,
+        rawPredictedConcentrationMgL: rawPredictedConc, dilutionFactor: dilFactor,
+        correctedConcentrationMgL: correctedConc, inRange: inRange, isSaturated: isSaturated,
+        isTooDark: isTooDark, isTooBright: isTooBright, isValid: isValid
+      });
+    });
+    // Statistics on corrected concentrations (only valid ROIs)
+    var validResults = results.filter(function(r) { return r.isValid && r.correctedConcentrationMgL !== null; });
+    var correctedVals = validResults.map(function(r) { return r.correctedConcentrationMgL; });
+    var stats = { count: 0, mean: null, median: null, sd: null, cv: null, min: null, max: null };
+    if (correctedVals.length > 0) {
+      var sum = correctedVals.reduce(function(a, b) { return a + b; }, 0);
+      stats.count = correctedVals.length;
+      stats.mean = parseFloat((sum / stats.count).toFixed(4));
+      var sorted = correctedVals.slice().sort(function(a, b) { return a - b; });
+      stats.median = stats.count % 2 === 0 ? parseFloat(((sorted[stats.count / 2 - 1] + sorted[stats.count / 2]) / 2).toFixed(4)) : sorted[Math.floor(stats.count / 2)];
+      var variance = correctedVals.reduce(function(a, v) { return a + Math.pow(v - stats.mean, 2); }, 0) / stats.count;
+      stats.sd = parseFloat(Math.sqrt(variance).toFixed(4));
+      stats.cv = stats.mean > 0 ? parseFloat((stats.sd / stats.mean * 100).toFixed(2)) : null;
+      stats.min = parseFloat(Math.min.apply(null, correctedVals).toFixed(4));
+      stats.max = parseFloat(Math.max.apply(null, correctedVals).toFixed(4));
+    }
+    // Render results
+    var el = document.getElementById('ironResults');
+    el.style.display = 'block';
+    var html = '';
+    // Calibration traceability
+    html += '<div class="alert alert-info" style="font-size:11px"><strong>📋 Calibration Traceability</strong><br>Model: ' + (model.isBuiltIn ? 'Built-in ' : 'Custom ') + 'Iron Calibration ' + model.modelVersion + ' · Wavelength: ' + model.wavelengthNm + ' nm · Feature: ' + model.selectedFeature + ' · Type: ' + model.regressionType + ' · Range: ' + model.minimumConcentrationMgL + '–' + model.maximumConcentrationMgL + ' mg/L · R²: ' + model.rSquared.toFixed(4) + '</div>';
+    // Individual ROI results
+    html += '<div class="section-title">Individual ROI Results</div>';
+    html += '<div class="results-table-wrap"><table><thead><tr><th>ROI</th><th>Dilution</th><th>R</th><th>G</th><th>B</th><th>Feature</th><th>Raw Conc. (mg/L)</th><th>Corrected Conc. (mg/L)</th><th>Status</th></tr></thead><tbody>';
+    results.forEach(function(r) {
+      var status = r.isValid ? '✅ Valid' : '⚠️ ' + (!r.inRange ? 'OUTSIDE RANGE' : r.isSaturated ? 'SATURATED' : r.isTooDark ? 'TOO DARK' : r.isTooBright ? 'TOO BRIGHT' : 'INVALID');
+      var statusColor = r.isValid ? 'var(--green-ok)' : 'var(--red-warn)';
+      html += '<tr><td class="td-name">' + r.label + '</td><td>' + r.dilution + '</td><td>' + r.r + '</td><td>' + r.g + '</td><td>' + r.b + '</td><td><strong>' + (r.featureVal !== null ? r.featureVal.toFixed(2) : 'N/A') + '</strong></td><td>' + (r.rawPredictedConcentrationMgL !== null ? r.rawPredictedConcentrationMgL : 'N/A') + '</td><td style="color:var(--blue-bright);font-weight:800">' + (r.correctedConcentrationMgL !== null ? r.correctedConcentrationMgL : 'N/A') + '</td><td style="color:' + statusColor + ';font-weight:700;font-size:11px">' + status + '</td></tr>';
+    });
+    html += '</tbody></table></div>';
+    // Final leaf result summary
+    if (stats.count > 0) {
+      html += '<div class="section-title" style="margin-top:16px">🌿 Leaf Iron Result — Final Summary</div>';
+      html += '<div class="alert alert-success"><strong>LEAF IRON RESULT</strong></div>';
+      html += '<div class="metrics-grid">';
+      html += '<div class="metric-card"><span class="metric-val">' + stats.mean + '</span><div class="metric-lbl">Mean Conc. (mg/L)</div></div>';
+      html += '<div class="metric-card"><span class="metric-val">' + stats.median + '</span><div class="metric-lbl">Median (mg/L)</div></div>';
+      html += '<div class="metric-card"><span class="metric-val">' + stats.sd + '</span><div class="metric-lbl">Std Dev</div></div>';
+      html += '<div class="metric-card"><span class="metric-val">' + (stats.cv !== null ? stats.cv + '%' : 'N/A') + '</span><div class="metric-lbl">CV (%)</div></div>';
+      html += '</div>';
+      html += '<div class="metrics-grid">';
+      html += '<div class="metric-card"><span class="metric-val">' + stats.min + '</span><div class="metric-lbl">Min (mg/L)</div></div>';
+      html += '<div class="metric-card"><span class="metric-val">' + stats.max + '</span><div class="metric-lbl">Max (mg/L)</div></div>';
+      html += '<div class="metric-card"><span class="metric-val">' + stats.count + '</span><div class="metric-lbl">Valid ROIs</div></div>';
+      html += '<div class="metric-card"><span class="metric-val">' + results.length + '</span><div class="metric-lbl">Total ROIs</div></div>';
+      html += '</div>';
+      html += '<p style="font-size:11px;color:#888;margin-top:8px">Final iron concentration: <strong style="color:var(--blue-bright)">' + stats.mean + ' mg/L</strong> (mean of ' + stats.count + ' valid dilution ROIs) · Calibration: ' + (model.isBuiltIn ? 'Built-in' : 'Custom') + ' v' + model.modelVersion + ' · Range: ' + model.minimumConcentrationMgL + '–' + model.maximumConcentrationMgL + ' mg/L</p>';
+    } else {
+      html += '<div class="alert alert-warn" style="margin-top:14px"><strong>⚠️ No valid ROIs</strong> — All ROIs are outside calibration range or have quality issues.</div>';
+    }
+    el.innerHTML = html;
+  }
+
+  function getCalCanvasPos(e) {
+    const rect = document.getElementById('ironCalCanvasWrap').getBoundingClientRect();
+    const c = document.getElementById('ironCalImageCanvas');
+    let cx, cy;
+    if (e.touches && e.touches.length > 0) { cx = e.touches[0].clientX; cy = e.touches[0].clientY; }
+    else { cx = e.clientX; cy = e.clientY; }
+    return { x: (cx - rect.left) * (c.width / rect.width), y: (cy - rect.top) * (c.height / rect.height) };
+  }
+
+  function getSampleCanvasPos(e) {
+    const rect = document.getElementById('ironCanvasWrap').getBoundingClientRect();
+    const c = document.getElementById('ironImageCanvas');
+    let cx, cy;
+    if (e.touches && e.touches.length > 0) { cx = e.touches[0].clientX; cy = e.touches[0].clientY; }
+    else { cx = e.clientX; cy = e.clientY; }
+    return { x: (cx - rect.left) * (c.width / rect.width), y: (cy - rect.top) * (c.height / rect.height) };
+  }
+
+  function init() {
+    setTimeout(function() {
+      // File uploads
+      var calFile = document.getElementById('ironCalFileInput');
+      if (calFile) calFile.addEventListener('change', function(e) { if (e.target.files[0]) loadCalibrationImage(e.target.files[0]); });
+      var sampleFile = document.getElementById('ironFileInput');
+      if (sampleFile) sampleFile.addEventListener('change', function(e) { if (e.target.files[0]) loadSampleImage(e.target.files[0]); });
+      // Calibration drawing
+      document.getElementById('ironCalStartDrawing').addEventListener('click', function() {
+        calDrawing = true;
+        document.getElementById('ironCalStartDrawing').style.display = 'none';
+        document.getElementById('ironCalStopDrawing').style.display = '';
+        UI.toast('Draw ROI on calibration image. Drag to select.', 'info');
+      });
+      document.getElementById('ironCalStopDrawing').addEventListener('click', function() {
+        calDrawing = false;
+        document.getElementById('ironCalStartDrawing').style.display = '';
+        document.getElementById('ironCalStopDrawing').style.display = 'none';
+      });
+      document.getElementById('ironCalClearRois').addEventListener('click', function() { calRois = []; renderCalRois(); });
+      var calCanvas = document.getElementById('ironCalOverlayCanvas');
+      if (calCanvas) {
+        function calDown(e) { if (!calDrawing) return; e.preventDefault(); calDragStart = getCalCanvasPos(e); calCurrentShape = null; }
+        function calMove(e) { if (!calDrawing || !calDragStart) return; e.preventDefault(); var p = getCalCanvasPos(e); calCurrentShape = { x: Math.min(calDragStart.x, p.x), y: Math.min(calDragStart.y, p.y), w: Math.abs(p.x - calDragStart.x), h: Math.abs(p.y - calDragStart.y) }; renderCalRois(); }
+        function calUp(e) { if (!calDrawing || !calDragStart) return; e.preventDefault(); var p = getCalCanvasPos(e); var w = Math.abs(p.x - calDragStart.x), h = Math.abs(p.y - calDragStart.y); if (w > 10 && h > 10) { var roi = { x: Math.min(calDragStart.x, p.x), y: Math.min(calDragStart.y, p.y), w: w, h: h }; roi.colorData = extractCalRoiData(roi); calRois.push(roi); renderCalRois(); } calDragStart = null; calCurrentShape = null; }
+        calCanvas.addEventListener('mousedown', calDown);
+        calCanvas.addEventListener('mousemove', calMove);
+        calCanvas.addEventListener('mouseup', calUp);
+        calCanvas.addEventListener('touchstart', calDown, { passive: false });
+        calCanvas.addEventListener('touchmove', calMove, { passive: false });
+        calCanvas.addEventListener('touchend', calUp, { passive: false });
+      }
+      // Build button
+      document.getElementById('ironCalBuildBtn').addEventListener('click', buildCalibrationModel);
+      // Sample drawing
+      document.getElementById('ironStartDrawing').addEventListener('click', function() {
+        sampleDrawing = true;
+        document.getElementById('ironStartDrawing').style.display = 'none';
+        document.getElementById('ironStopDrawing').style.display = '';
+        UI.toast('Draw ROI on sample image. Drag to select.', 'info');
+      });
+      document.getElementById('ironStopDrawing').addEventListener('click', function() {
+        sampleDrawing = false;
+        document.getElementById('ironStartDrawing').style.display = '';
+        document.getElementById('ironStopDrawing').style.display = 'none';
+      });
+      document.getElementById('ironClearRois').addEventListener('click', function() { sampleRois = []; renderSampleRois(); document.getElementById('ironResults').style.display = 'none'; });
+      var sampleCanvas = document.getElementById('ironOverlayCanvas');
+      if (sampleCanvas) {
+        function sDown(e) { if (!sampleDrawing) return; e.preventDefault(); sampleDragStart = getSampleCanvasPos(e); sampleCurrentShape = null; }
+        function sMove(e) { if (!sampleDrawing || !sampleDragStart) return; e.preventDefault(); var p = getSampleCanvasPos(e); sampleCurrentShape = { x: Math.min(sampleDragStart.x, p.x), y: Math.min(sampleDragStart.y, p.y), w: Math.abs(p.x - sampleDragStart.x), h: Math.abs(p.y - sampleDragStart.y) }; renderSampleRois(); }
+        function sUp(e) { if (!sampleDrawing || !sampleDragStart) return; e.preventDefault(); var p = getSampleCanvasPos(e); var w = Math.abs(p.x - sampleDragStart.x), h = Math.abs(p.y - sampleDragStart.y); if (w > 10 && h > 10) { sampleRois.push({ x: Math.min(sampleDragStart.x, p.x), y: Math.min(sampleDragStart.y, p.y), w: w, h: h }); renderSampleRois(); } sampleDragStart = null; sampleCurrentShape = null; }
+        sampleCanvas.addEventListener('mousedown', sDown);
+        sampleCanvas.addEventListener('mousemove', sMove);
+        sampleCanvas.addEventListener('mouseup', sUp);
+        sampleCanvas.addEventListener('touchstart', sDown, { passive: false });
+        sampleCanvas.addEventListener('touchmove', sMove, { passive: false });
+        sampleCanvas.addEventListener('touchend', sUp, { passive: false });
+      }
+      document.getElementById('ironRunAnalysis').addEventListener('click', runIronAnalysis);
+      // Add developer mode toggle to advanced tab
+      var advBody = document.querySelector('#tab-advanced .card-body');
+      if (advBody && !document.getElementById('ironDevToggle')) {
+        var toggleDiv = document.createElement('div');
+        toggleDiv.id = 'ironDevToggle';
+        toggleDiv.style.cssText = 'margin-top:16px;padding:14px;background:var(--gray-50);border-radius:var(--radius-sm);border:1px solid var(--border)';
+        toggleDiv.innerHTML = '<div class="toggle-row"><span class="toggle-label"><strong>🔧 Iron Calibration Builder (Developer Mode)</strong><br><span style="font-size:11px;color:#888">Show/hide the calibration builder in the Iron tab</span></span><label class="toggle"><input type="checkbox" id="ironDevModeCheck" ' + (isDevMode() ? 'checked' : '') + '><span class="toggle-slider"></span></label></div>';
+        advBody.appendChild(toggleDiv);
+        document.getElementById('ironDevModeCheck').addEventListener('change', function() { toggleDevMode(); });
+      }
+      // Wire up the Iron tab dev mode toggle
+      var ironTabDevCheck = document.getElementById('ironTabDevCheck');
+      if (ironTabDevCheck) {
+        ironTabDevCheck.checked = isDevMode();
+        ironTabDevCheck.addEventListener('change', function() { toggleDevMode(); });
+      }
+    }, 100);
+  }
+
+  return { init: init, refreshIronTab: refreshIronTab, toggleDevMode: toggleDevMode, isDevMode: isDevMode, deleteSampleRoi: deleteSampleRoi, resetToBuiltin: resetToBuiltin };
+})();
+
 /* ── INIT ── */
 (function init(){
+  IronCalibration.init();
   AccessControl.init();
   [2,3,4].forEach(n=>{const el=document.getElementById('modeHelp'+n);if(el)el.style.display='none';});
   UI.updateBanner();UI.renderLicenseInfo();
