@@ -2399,6 +2399,57 @@ const IronCalibration = (() => {
   const DEFAULT_CONCS = [100, 50, 25, 12.5, 6.25, 3.125, 1.5625, 0.78125];
   const DEFAULT_DILUTIONS = [1, 2, 4, 8, 16, 32, 64, 128];
   const DEFAULT_ABSORBANCES = [0.419, 0.386, 0.517, 0.407, 0.230, 0.316, 0.234, 0.122];
+
+  /* Built-in default iron calibration model using real image color data */
+  const BUILTIN_STANDARDS = [
+    { level: 1, concentration: 100, dilutionFactor: 1, absorbance560: 0.419, colorData: { avgR: 24, avgG: 14, avgB: 16, hsv: { h: 348, s: 41.7, v: 9.4 }, lab: { L: 4.93, a: 2.44, b: 1.22 }, intensity: 16.62 } },
+    { level: 2, concentration: 50, dilutionFactor: 2, absorbance560: 0.386, colorData: { avgR: 104, avgG: 22, avgB: 4, hsv: { h: 10.8, s: 96.2, v: 40.8 }, lab: { L: 22.04, a: 33.5, b: 30.2 }, intensity: 41.06 } },
+    { level: 3, concentration: 25, dilutionFactor: 4, absorbance560: 0.517, colorData: { avgR: 164, avgG: 95, avgB: 3, hsv: { h: 34.3, s: 98.2, v: 64.3 }, lab: { L: 47.09, a: 25.6, b: 53.8 }, intensity: 104.51 } },
+    { level: 4, concentration: 12.5, dilutionFactor: 8, absorbance560: 0.407, colorData: { avgR: 170, avgG: 157, avgB: 71, hsv: { h: 52.1, s: 58.2, v: 66.7 }, lab: { L: 64.25, a: 5.2, b: 38.1 }, intensity: 152.96 } },
+    { level: 5, concentration: 6.25, dilutionFactor: 16, absorbance560: 0.230, colorData: { avgR: 177, avgG: 189, avgB: 147, hsv: { h: 77.1, s: 22.2, v: 74.1 }, lab: { L: 74.73, a: -8.1, b: 22.5 }, intensity: 180.69 } },
+    { level: 6, concentration: 3.125, dilutionFactor: 32, absorbance560: 0.316, colorData: { avgR: 170, avgG: 194, avgB: 180, hsv: { h: 145, s: 12.4, v: 76.1 }, lab: { L: 76.33, a: -9.5, b: 5.8 }, intensity: 185.42 } },
+    { level: 7, concentration: 1.5625, dilutionFactor: 64, absorbance560: 0.234, colorData: { avgR: 170, avgG: 196, avgB: 185, hsv: { h: 154.6, s: 13.3, v: 76.9 }, lab: { L: 77.00, a: -10.2, b: 4.1 }, intensity: 187.18 } },
+    { level: 8, concentration: 0.78125, dilutionFactor: 128, absorbance560: 0.122, colorData: { avgR: 156, avgG: 183, avgB: 172, hsv: { h: 155.6, s: 14.8, v: 71.8 }, lab: { L: 72.17, a: -10.8, b: 3.5 }, intensity: 175.35 } }
+  ];
+
+  /* Build the built-in calibration model by finding the best feature */
+  function buildBuiltinModel() {
+    var features = ['R', 'G', 'B', 'H', 'S', 'V', 'L*', 'a*', 'b*', 'Intensity'];
+    var best = { feature: '', r2: -1, rmse: Infinity, mae: Infinity, model: null };
+    features.forEach(function(f) {
+      var xs = [], ys = [];
+      BUILTIN_STANDARDS.forEach(function(s) {
+        var val = null;
+        if (f === 'R') val = s.colorData.avgR;
+        else if (f === 'G') val = s.colorData.avgG;
+        else if (f === 'B') val = s.colorData.avgB;
+        else if (f === 'H') val = s.colorData.hsv.h;
+        else if (f === 'S') val = s.colorData.hsv.s;
+        else if (f === 'V') val = s.colorData.hsv.v;
+        else if (f === 'L*') val = s.colorData.lab.L;
+        else if (f === 'a*') val = s.colorData.lab.a;
+        else if (f === 'b*') val = s.colorData.lab.b;
+        else if (f === 'Intensity') val = s.colorData.intensity;
+        if (val !== null) { xs.push(s.concentration); ys.push(val); }
+      });
+      if (xs.length < 3) return;
+      var lr = linearRegression(xs, ys);
+      if (lr.r2 > best.r2) { best = { feature: f, r2: lr.r2, rmse: lr.rmse, mae: Math.sqrt(lr.rmse), model: lr }; }
+    });
+    var concs = BUILTIN_STANDARDS.map(function(s) { return s.concentration; });
+    return {
+      modelVersion: '1.0', active: true, wavelengthNm: 560, stockConcentrationMgL: 100,
+      standards: BUILTIN_STANDARDS, selectedFeature: best.feature, regressionType: 'linear',
+      coefficients: [best.model.m, best.model.b], intercept: best.model.b,
+      equation: 'y = ' + best.model.m.toFixed(4) + 'x + ' + best.model.b.toFixed(4),
+      rSquared: best.r2, rmse: best.rmse, mae: best.mae,
+      minimumConcentrationMgL: Math.min.apply(null, concs), maximumConcentrationMgL: Math.max.apply(null, concs),
+      calibrationDate: new Date().toISOString(), isBuiltIn: true
+    };
+  }
+
+  let _builtinModel = null;
+  function getBuiltinModel() { if (!_builtinModel) _builtinModel = buildBuiltinModel(); return _builtinModel; }
   let calImg = null, calRois = [], calDrawing = false, calDragStart = null, calCurrentShape = null;
   let sampleImg = null, sampleRois = [], sampleDrawing = false, sampleDragStart = null, sampleCurrentShape = null;
   const calCtx = (() => { const c = document.getElementById('ironCalImageCanvas'); return c ? c.getContext('2d') : null; })();
@@ -2412,7 +2463,7 @@ const IronCalibration = (() => {
   function isDevMode() { return get(DEV_MODE_KEY) === true; }
   function toggleDevMode() { const v = !isDevMode(); set(DEV_MODE_KEY, v); refreshIronTab(); return v; }
 
-  function getModel() { return get(STORAGE_KEY); }
+  function getModel() { var m = get(STORAGE_KEY); return m || getBuiltinModel(); }
   function saveModel(model) { set(STORAGE_KEY, model); }
 
   function refreshIronTab() {
@@ -2487,13 +2538,13 @@ const IronCalibration = (() => {
     const el = document.getElementById('ironCalStandardsList');
     if (calRois.length === 0) { el.innerHTML = ''; return; }
     let html = '<div class="section-title">Calibration Standards (' + calRois.length + ')</div>';
-    html += '<div class="results-table-wrap" style="overflow-x:auto"><table><thead><tr><th>Level</th><th>Conc. (mg/L)</th><th>Dilution</th><th>A560nm</th><th>R</th><th>G</th><th>B</th><th>H°</th><th>S%</th><th>V%</th><th>L*</th></tr></thead><tbody>';
+    html += '<div class="results-table-wrap" style="overflow-x:auto"><table><thead><tr><th>Level</th><th>Conc. (mg/L)</th><th>Dilution</th><th>A560nm</th><th>R</th><th>G</th><th>B</th><th>H°</th><th>S%</th><th>V%</th><th>L*</th><th>a*</th><th>b*</th><th>Int.</th></tr></thead><tbody>';
     calRois.forEach(function(roi, i) {
       const d = DEFAULT_CONCS[i] !== undefined ? DEFAULT_CONCS[i] : '';
       const dil = DEFAULT_DILUTIONS[i] !== undefined ? DEFAULT_DILUTIONS[i] : '';
       const abs = roi._absorbance !== undefined ? roi._absorbance : (DEFAULT_ABSORBANCES[i] !== undefined ? DEFAULT_ABSORBANCES[i] : '');
       const cd = roi.colorData || {};
-      html += '<tr><td>' + (i + 1) + '</td><td><input type="number" step="any" style="width:80px;padding:4px;font-size:11px" value="' + d + '" id="calConc_' + i + '" placeholder="Conc."></td><td>' + dil + '</td><td><input type="number" step="any" style="width:80px;padding:4px;font-size:11px" value="' + abs + '" id="calAbs_' + i + '" placeholder="A560nm"></td><td>' + (cd.avgR || '') + '</td><td>' + (cd.avgG || '') + '</td><td>' + (cd.avgB || '') + '</td><td>' + (cd.hsv ? cd.hsv.h : '') + '</td><td>' + (cd.hsv ? cd.hsv.s : '') + '</td><td>' + (cd.hsv ? cd.hsv.v : '') + '</td><td>' + (cd.lab ? cd.lab.L : '') + '</td></tr>';
+      html += '<tr><td>' + (i + 1) + '</td><td><input type="number" step="any" style="width:80px;padding:4px;font-size:11px" value="' + d + '" id="calConc_' + i + '" placeholder="Conc."></td><td>' + dil + '</td><td><input type="number" step="any" style="width:80px;padding:4px;font-size:11px" value="' + abs + '" id="calAbs_' + i + '" placeholder="A560nm"></td><td>' + (cd.avgR || '') + '</td><td>' + (cd.avgG || '') + '</td><td>' + (cd.avgB || '') + '</td><td>' + (cd.hsv ? cd.hsv.h : '') + '</td><td>' + (cd.hsv ? cd.hsv.s : '') + '</td><td>' + (cd.hsv ? cd.hsv.v : '') + '</td><td>' + (cd.lab ? cd.lab.L : '') + '</td><td>' + (cd.lab ? cd.lab.a : '') + '</td><td>' + (cd.lab ? cd.lab.b : '') + '</td><td>' + (cd.intensity !== undefined ? cd.intensity.toFixed(2) : '') + '</td></tr>';
     });
     html += '</tbody></table></div>';
     el.innerHTML = html;
