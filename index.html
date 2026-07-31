@@ -2538,16 +2538,24 @@ const IronCalibration = (() => {
     const el = document.getElementById('ironCalStandardsList');
     if (calRois.length === 0) { el.innerHTML = ''; return; }
     let html = '<div class="section-title">Calibration Standards (' + calRois.length + ')</div>';
-    html += '<div class="results-table-wrap" style="overflow-x:auto"><table><thead><tr><th>Level</th><th>Conc. (mg/L)</th><th>Dilution</th><th>A560nm</th><th>R</th><th>G</th><th>B</th><th>H°</th><th>S%</th><th>V%</th><th>L*</th><th>a*</th><th>b*</th><th>Int.</th></tr></thead><tbody>';
+    html += '<div class="results-table-wrap" style="overflow-x:auto"><table><thead><tr><th>Level</th><th>Conc. (mg/L)</th><th>Dilution</th><th>A560nm</th><th>R</th><th>G</th><th>B</th><th>H°</th><th>S%</th><th>V%</th><th>L*</th><th>a*</th><th>b*</th><th>Int.</th><th>Action</th></tr></thead><tbody>';
     calRois.forEach(function(roi, i) {
       const d = DEFAULT_CONCS[i] !== undefined ? DEFAULT_CONCS[i] : '';
       const dil = DEFAULT_DILUTIONS[i] !== undefined ? DEFAULT_DILUTIONS[i] : '';
       const abs = roi._absorbance !== undefined ? roi._absorbance : (DEFAULT_ABSORBANCES[i] !== undefined ? DEFAULT_ABSORBANCES[i] : '');
       const cd = roi.colorData || {};
-      html += '<tr><td>' + (i + 1) + '</td><td><input type="number" step="any" style="width:80px;padding:4px;font-size:11px" value="' + d + '" id="calConc_' + i + '" placeholder="Conc."></td><td>' + dil + '</td><td><input type="number" step="any" style="width:80px;padding:4px;font-size:11px" value="' + abs + '" id="calAbs_' + i + '" placeholder="A560nm"></td><td>' + (cd.avgR || '') + '</td><td>' + (cd.avgG || '') + '</td><td>' + (cd.avgB || '') + '</td><td>' + (cd.hsv ? cd.hsv.h : '') + '</td><td>' + (cd.hsv ? cd.hsv.s : '') + '</td><td>' + (cd.hsv ? cd.hsv.v : '') + '</td><td>' + (cd.lab ? cd.lab.L : '') + '</td><td>' + (cd.lab ? cd.lab.a : '') + '</td><td>' + (cd.lab ? cd.lab.b : '') + '</td><td>' + (cd.intensity !== undefined ? cd.intensity.toFixed(2) : '') + '</td></tr>';
+      html += '<tr><td>' + (i + 1) + '</td><td><input type="number" step="any" style="width:80px;padding:4px;font-size:11px" value="' + d + '" id="calConc_' + i + '" placeholder="Conc."></td><td>' + dil + '</td><td><input type="number" step="any" style="width:80px;padding:4px;font-size:11px" value="' + abs + '" id="calAbs_' + i + '" placeholder="A560nm"></td><td>' + (cd.avgR || '') + '</td><td>' + (cd.avgG || '') + '</td><td>' + (cd.avgB || '') + '</td><td>' + (cd.hsv ? cd.hsv.h : '') + '</td><td>' + (cd.hsv ? cd.hsv.s : '') + '</td><td>' + (cd.hsv ? cd.hsv.v : '') + '</td><td>' + (cd.lab ? cd.lab.L : '') + '</td><td>' + (cd.lab ? cd.lab.a : '') + '</td><td>' + (cd.lab ? cd.lab.b : '') + '</td><td>' + (cd.intensity !== undefined ? cd.intensity.toFixed(2) : '') + '</td><td><button class="btn btn-danger btn-sm" onclick="IronCalibration.deleteCalRoi(' + i + ')" title="Delete ROI">✕</button></td></tr>';
     });
     html += '</tbody></table></div>';
     el.innerHTML = html;
+  }
+
+  function deleteCalRoi(idx) {
+    calRois.splice(idx, 1);
+    renderCalRois();
+    document.getElementById('ironCalResults').style.display = 'none';
+    document.getElementById('ironCalBuildBtn').style.display = '';
+    document.getElementById('ironCalSaveModelBtn').style.display = 'none';
   }
 
   function extractCalRoiData(roi) {
@@ -2919,7 +2927,7 @@ const IronCalibration = (() => {
     }, 100);
   }
 
-  return { init: init, refreshIronTab: refreshIronTab, toggleDevMode: toggleDevMode, isDevMode: isDevMode, deleteSampleRoi: deleteSampleRoi };
+  return { init: init, refreshIronTab: refreshIronTab, toggleDevMode: toggleDevMode, isDevMode: isDevMode, deleteSampleRoi: deleteSampleRoi, deleteCalRoi: deleteCalRoi };
 })();
 
 /* ── INIT ── */
